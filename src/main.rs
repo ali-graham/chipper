@@ -1,40 +1,79 @@
+extern crate sdl2;
+
+// use std::process;
+use sdl2::event::{Event};
+use sdl2::pixels;
+use sdl2::keyboard::Keycode;
+
+use std::io::prelude::*;
+use std::fs::File;
+
+const SCREEN_WIDTH: u32 = 64;
+const SCREEN_HEIGHT: u32 = 32;
+
+mod chip8;
+
 fn main() {
-    let mut _opcode: u16;
 
-    let mut _v0: u8;
-    let mut _v1: u8;
-    let mut _v2: u8;
-    let mut _v3: u8;
-    let mut _v4: u8;
-    let mut _v5: u8;
-    let mut _v6: u8;
-    let mut _v7: u8;
-    let mut _v8: u8;
-    let mut _v9: u8;
-    let mut _va: u8;
-    let mut _vb: u8;
-    let mut _vc: u8;
-    let mut _vd: u8;
-    let mut _ve: u8;
-    let mut _vf: u8; // carry flag
+    // get ROM filename from command line
 
-    let mut _i: u16;
+    // set up graphics (SDL)
 
-    let mut _pc: u16;
+    // set up input (SDL)
 
-    // 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
-    // 0x050-0x0A0 - Used for the built in 4x5 pixel font set (0-F)
-    // 0x200-0xFFF - Program ROM and work RAM
-    let mut _memory: [u8; 4096];
-    let mut _gfx: [u8; 64 * 32];
+    let sdl_context = sdl2::init().unwrap();
 
-    let mut _delay_timer: u8;
+    let video_subsys = sdl_context.video().unwrap();
+    let window = video_subsys.window("chipper", SCREEN_WIDTH, SCREEN_HEIGHT)
+        .position_centered()
+        .build()
+        .unwrap();
 
-    // The system’s buzzer sounds whenever the sound timer reaches zero.
-    let mut _sound_timer: u8;
+    let mut canvas = window.into_canvas().build().unwrap();
 
-    let mut _stack: [u16; 16];
-    let mut _sp: u16;
+    canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
+    canvas.clear();
+    canvas.present();
 
-    let mut _key: [u8; 16];
+    let mut events = sdl_context.event_pump().unwrap();
+
+    let mut chip8: chip8::Chip8 = Default::default();
+
+    // FIXME: get filename from CLI argument
+
+    let mut f = File::open("programs/Chip8 Picture.ch8").unwrap();
+    let mut rom_data = Vec::new();
+    f.read_to_end(&mut rom_data).unwrap();
+
+    chip8.initialize();
+    chip8.load_rom(&rom_data);
+
+    let mut main_loop = || {
+
+        chip8.emulate_cycle();
+
+        for event in events.poll_iter() {
+            match event {
+                Event::Quit {..} | Event::KeyDown {keycode: Some(Keycode::Escape), ..} => {
+                    // process::exit(1);
+                },
+                Event::KeyDown { keycode: Some(Keycode::Left), ..} => {
+                    // rect.x -= 10;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Right), ..} => {
+                    // rect.x += 10;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Up), ..} => {
+                    // rect.y -= 10;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Down), ..} => {
+                    // rect.y += 10;
+                },
+                _ => {}
+            }
+        }
+
+    };
+
+    loop { main_loop(); }
 }
