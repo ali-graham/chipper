@@ -32,4 +32,9 @@ fn main() {
 
     // The system’s buzzer sounds whenever the sound timer reaches zero.
     let mut _sound_timer: u8;
+
+    let mut _stack: [u16; 16];
+    let mut _sp: u16;
+
+    let mut _key: [u8; 16];
 }
