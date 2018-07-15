@@ -1,30 +1,26 @@
 extern crate sdl2;
 
-// use std::process;
-use sdl2::event::{Event};
+use std::{process, thread};
+use std::time::{Duration, Instant};
+use sdl2::event::Event;
 use sdl2::pixels;
+use sdl2::rect::Rect;
 use sdl2::keyboard::Keycode;
 
 use std::io::prelude::*;
 use std::fs::File;
 
-const SCREEN_WIDTH: u32 = 64;
-const SCREEN_HEIGHT: u32 = 32;
-
 mod chip8;
 
+const DISPLAY_SCALE: u32 = 8;
+const DISPLAY_WIDTH: u32 = chip8::SCREEN_WIDTH * DISPLAY_SCALE;
+const DISPLAY_HEIGHT: u32 = chip8::SCREEN_HEIGHT * DISPLAY_SCALE;
+
 fn main() {
-
-    // get ROM filename from command line
-
-    // set up graphics (SDL)
-
-    // set up input (SDL)
-
     let sdl_context = sdl2::init().unwrap();
 
     let video_subsys = sdl_context.video().unwrap();
-    let window = video_subsys.window("chipper", SCREEN_WIDTH, SCREEN_HEIGHT)
+    let window = video_subsys.window("chipper", DISPLAY_WIDTH, DISPLAY_HEIGHT)
         .position_centered()
         .build()
         .unwrap();
@@ -48,31 +44,57 @@ fn main() {
     chip8.initialize();
     chip8.load_rom(&rom_data);
 
+    // unnecessary init, but compiler complains
+    let mut start = Instant::now();
+    let tick = Duration::from_millis(1000 / 60);
+
     let mut main_loop = || {
+        start = Instant::now();
 
         chip8.emulate_cycle();
+
+        if chip8.graphics_needs_refresh() {
+            for yline in 0..chip8::SCREEN_HEIGHT {
+                for xline in 0..chip8::SCREEN_WIDTH {
+                    if chip8.gfx[((yline * chip8::SCREEN_WIDTH) + xline) as usize] == 1 {
+                        canvas.set_draw_color(pixels::Color::RGB(255, 255, 255));
+                    } else {
+                        canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
+                    }
+                    let r = Rect::new((xline * DISPLAY_SCALE) as i32, (yline * DISPLAY_SCALE) as i32, DISPLAY_SCALE, DISPLAY_SCALE);
+                    canvas.draw_rect(r).unwrap();
+                    canvas.fill_rect(r).unwrap();
+                }
+            }
+            canvas.present();
+            chip8.graphics_clear_refresh();
+        }
 
         for event in events.poll_iter() {
             match event {
                 Event::Quit {..} | Event::KeyDown {keycode: Some(Keycode::Escape), ..} => {
-                    // process::exit(1);
+                    process::exit(1);
                 },
-                Event::KeyDown { keycode: Some(Keycode::Left), ..} => {
-                    // rect.x -= 10;
-                },
-                Event::KeyDown { keycode: Some(Keycode::Right), ..} => {
-                    // rect.x += 10;
-                },
-                Event::KeyDown { keycode: Some(Keycode::Up), ..} => {
-                    // rect.y -= 10;
-                },
-                Event::KeyDown { keycode: Some(Keycode::Down), ..} => {
-                    // rect.y += 10;
-                },
+                // Event::KeyDown { keycode: Some(Keycode::Left), ..} => {
+
+                // },
+                // Event::KeyDown { keycode: Some(Keycode::Right), ..} => {
+
+                // },
+                // Event::KeyDown { keycode: Some(Keycode::Up), ..} => {
+
+                // },
+                // Event::KeyDown { keycode: Some(Keycode::Down), ..} => {
+
+                // },
                 _ => {}
             }
         }
 
+        match tick.checked_sub(start.elapsed()) {
+            Some(remaining) => thread::sleep(remaining),
+            None => {}
+        }
     };
 
     loop { main_loop(); }
