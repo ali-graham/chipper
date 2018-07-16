@@ -181,6 +181,7 @@ impl Chip8 {
             }
             0x00EE => {
                 // 00EE - return from a subroutine
+                // TODO: panic if stack is empty?
                 self.sp -= 1;
                 self.pc = self.stack[self.sp as usize] + 2;
             }
@@ -190,6 +191,7 @@ impl Chip8 {
             }
             o if o & 0xF000 == 0x2000 => {
                 // 2NNN - subroutine
+                // TODO: panic if stack is full?
                 self.stack[self.sp as usize] = self.pc;
                 self.sp += 1;
                 self.pc = o & 0x0FFF;
@@ -216,6 +218,17 @@ impl Chip8 {
                     self.pc += 2;
                 };
             }
+            o if o & 0xF00F == 0x5000 => {
+                // 5XY0 - Skip the following instruction if the value of register VX equals value of register VY
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                if self.v[reg_x as usize] == self.v[reg_y as usize] {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                };
+            }
             o if o & 0xF000 == 0x6000 => {
                 // 6XNN - store NN in register X
                 let reg = (o & 0x0F00) >> 8;
@@ -232,11 +245,71 @@ impl Chip8 {
                 self.vf = if result_carry.1 { 1 } else { 0 };
                 self.pc += 2;
             }
+            o if o & 0xF00F == 0x8000 => {
+                // 8XY0 - Assign the value of register VX to the value of register VY
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] = self.v[reg_y as usize];
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x8001 => {
+                // 8XY1 - Bitwise OR the values of registers VX and register VY, result to VX
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] |= self.v[reg_y as usize];
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x8002 => {
+                // 8XY2 - Bitwise AND the values of registers VX and register VY, result to VX
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] &= self.v[reg_y as usize];
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x8003 => {
+                // 8XY3 - Bitwise XOR the values of registers VX and register VY, result to VX
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] ^= self.v[reg_y as usize];
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x8004 => {
+                // 8XY4 - Add the values of registers VX and register VY, result to VX
+                // VF = 1 if overflow
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                let result_carry = self.v[reg_x as usize].overflowing_add(self.v[reg_y as usize]);
+                self.v[reg_x as usize] = result_carry.0;
+                self.vf = if result_carry.1 { 1 } else { 0 };
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x8005 => {
+                // 8XY5 - Subtract value of register VY from value of register VX, result to VX
+                // VF = 1 if no borrow, 0 if there is
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                let result_borrow = self.v[reg_x as usize].overflowing_sub(self.v[reg_y as usize]);
+                self.v[reg_x as usize] = result_borrow.0;
+                self.vf = if result_borrow.1 { 0 } else { 1 };
+                self.pc += 2;
+            }
+            // TODO: 8XY6
+            // TODO: 8XY7
+            // TODO: 8XYE
+            // TODO: 9XY0
             o if o & 0xF000 == 0xA000 => {
                 // ANNN - store NNN in I
                 self.i = o & 0x0FFF;
                 self.pc += 2;
             }
+            // TODO: BNNN
+            // TODO: CXNN
             o if o & 0xF000 == 0xD000 => {
                 // DXYN - Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
                 // Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
@@ -267,6 +340,12 @@ impl Chip8 {
 
                 self.pc += 2;
             }
+            // TODO: EX9E
+            // TODO: EXA1
+            // TODO: FX07
+            // TODO: FX0A
+            // TODO: FX15
+            // TODO: FX18
             o if o & 0xF0FF == 0xF01E => {
                 // FX1E - Add the value stored in register VX to register I
                 // NB: should set carry flag if 12-bit limit exceeded for I
@@ -281,6 +360,10 @@ impl Chip8 {
 
                 self.pc += 2;
             }
+            // TODO: FX29
+            // TODO: FX33
+            // TODO: FX55
+            // TODO: FX65
             o => panic!("unknown opcode {:x?}", o),
         };
 
