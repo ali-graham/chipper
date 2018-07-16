@@ -110,7 +110,7 @@ pub struct Chip8 {
     stack: [u16; 16],
     sp: u16,
 
-    pub _key: [u8; 16],
+    pub key: [u8; 16],
 
     draw: bool,
 }
@@ -131,7 +131,7 @@ impl Default for Chip8 {
             stack: [0u16; 16],
             sp: 0,
             gfx: [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
-            _key: [0u8; 16],
+            key: [0u8; 16],
 
             draw: true,
         }
@@ -167,7 +167,6 @@ impl Chip8 {
     }
 
     pub fn emulate_cycle(&mut self) {
-
         let opcode = ((self.memory[self.pc as usize] as u16) << 8)
             | (self.memory[(self.pc + 1) as usize] as u16);
 
@@ -360,11 +359,11 @@ impl Chip8 {
                 let val = (o & 0x00FF) as u8;
 
                 self.v[reg as usize] = val & rand::random::<u8>();
+                self.pc += 2;
             }
             o if o & 0xF000 == 0xD000 => {
                 // DXYN - Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
                 // Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
-
                 let reg_x = (o & 0x0F00) >> 8;
                 let reg_y = (o & 0x00F0) >> 4;
                 let height = o & 0x000F;
@@ -391,12 +390,62 @@ impl Chip8 {
 
                 self.pc += 2;
             }
-            // TODO: EX9E
-            // TODO: EXA1
-            // TODO: FX07
-            // TODO: FX0A
-            // TODO: FX15
-            // TODO: FX18
+            o if o & 0xF0FF == 0xE09E => {
+                // EX9E - Skip the following instruction if the key corresponding to the
+                // value currently stored in register VX is pressed
+                let reg = (o & 0x0F00) >> 8;
+
+                if self.key[self.v[reg as usize] as usize] == 1 {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                };
+            }
+            o if o & 0xF0FF == 0xE0A1 => {
+                // EXA1 - Skip the following instruction if the key corresponding to the
+                // value currently stored in register VX is not pressed
+                let reg = (o & 0x0F00) >> 8;
+
+                if self.key[self.v[reg as usize] as usize] == 1 {
+                    self.pc += 2;
+                } else {
+                    self.pc += 4;
+                };
+            }
+            o if o & 0xF0FF == 0xF007 => {
+                // FX07 - Store the current value of the delay timer in register VX
+                let reg = (o & 0x0F00) >> 8;
+
+                self.v[reg as usize] = self.delay_timer;
+                self.pc += 2;
+            }
+            o if o & 0xF0FF == 0xF00A => {
+                // FX0A - Wait for a keypress and store the result in register VX
+                let reg = (o & 0x0F00) >> 8;
+
+                match self.key.iter().position(|&x| x != 0) {
+                    Some(pressed) => {
+                        self.v[reg as usize] = pressed as u8;
+
+                        self.pc += 2;
+                    }
+                    None => {} // don't advance program counter
+                }
+            }
+            o if o & 0xF0FF == 0xF015 => {
+                // FX15 - Set the delay timer to the value of register VX
+                let reg = (o & 0x0F00) >> 8;
+
+                self.delay_timer = self.v[reg as usize];
+                self.pc += 2;
+            }
+            o if o & 0xF0FF == 0xF018 => {
+                // FX18 - Set the sound timer to the value of register VX
+                let reg = (o & 0x0F00) >> 8;
+
+                self.sound_timer = self.v[reg as usize];
+                self.pc += 2;
+            }
             o if o & 0xF0FF == 0xF01E => {
                 // FX1E - Add the value stored in register VX to register I
                 // Sets carry flag if 12-bit limit exceeded for I
@@ -411,10 +460,51 @@ impl Chip8 {
 
                 self.pc += 2;
             }
-            // TODO: FX29
-            // TODO: FX33
-            // TODO: FX55
-            // TODO: FX65
+            o if o & 0xF0FF == 0xF029 => {
+                // FX29 - Set I to the memory address of the sprite data corresponding to the
+                // hexadecimal digit stored in register VX
+                let reg = (o & 0x0F00) >> 8;
+
+                // TODO: error if register value > 0x0F
+                self.i = (5 * self.v[reg as usize]) as u16;
+
+                self.pc += 2;
+            }
+            o if o & 0xF0FF == 0xF033 => {
+                // FX33 - Store the binary-coded decimal equivalent of the value stored in
+                // register VX at addresses I, I + 1, and I + 2
+                let reg = (o & 0x0F00) >> 8;
+
+                let ones = self.v[reg as usize] % 10;
+                let tens = ((self.v[reg as usize] % 100) - ones) / 10;
+                let hundreds = (self.v[reg as usize] - (tens + ones)) / 100;
+
+                self.memory[self.i as usize] = hundreds;
+                self.memory[(self.i + 1) as usize] = tens;
+                self.memory[(self.i + 2) as usize] = ones;
+
+                self.pc += 2;
+            }
+            o if o & 0xF0FF == 0xF055 => {
+                // FX55 - Store the values of registers V0 to VX inclusive in memory starting at address I
+                // I is set to I + X + 1 after operation
+                let reg_num = (o & 0x0F00) >> 8;
+                self.memory[(self.i as usize)..=(self.i + reg_num) as usize]
+                    .copy_from_slice(&self.v[0..=(reg_num as usize)]);
+                self.i += reg_num + 1;
+
+                self.pc += 2;
+            }
+            o if o & 0xF0FF == 0xF065 => {
+                // FX65 - Fill registers V0 to VX inclusive with the values stored in memory starting at address I
+                // I is set to I + X + 1 after operation
+                let reg_num = (o & 0x0F00) >> 8;
+                self.v[0..=(reg_num as usize)]
+                    .copy_from_slice(&self.memory[(self.i as usize)..=(self.i + reg_num) as usize]);
+                self.i += reg_num + 1;
+
+                self.pc += 2;
+            }
             o => panic!("unknown opcode {:x?}", o),
         };
 
@@ -439,6 +529,5 @@ impl Chip8 {
     }
 
     // pub fn set_keys(&self) {
-
     // }
 }
