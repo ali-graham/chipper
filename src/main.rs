@@ -24,7 +24,7 @@ fn main() {
         .about("Simple CHIP-8 emulator")
         .args_from_usage(
             "-f, --file=[file]   'ROM filename to load'
-             -s, --scale=[scale]  'Scale factor for the window'",
+             -s, --scale=[scale] 'Scale factor for the window'",
         )
         .get_matches();
 

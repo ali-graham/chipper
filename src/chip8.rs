@@ -165,11 +165,11 @@ impl Chip8 {
     }
 
     pub fn emulate_cycle(&mut self) {
-        // fetch
+
         let opcode = ((self.memory[self.pc as usize] as u16) << 8)
             | (self.memory[(self.pc + 1) as usize] as u16);
 
-        // decode & execute
+        // println!("pc {:x?}, opcode {:x?}", self.pc, opcode);
 
         match opcode {
             0x00E0 => {
@@ -179,20 +179,25 @@ impl Chip8 {
 
                 self.pc += 2;
             }
-            0x1000...0x1FFF => {
-                // 1NNN - goto
-                self.pc = opcode & 0x0FFF;
+            0x00EE => {
+                // 00EE - return from a subroutine
+                self.sp -= 1;
+                self.pc = self.stack[self.sp as usize] + 2;
             }
-            0x2000...0x2FFF => {
+            o if o & 0xF000 == 0x1000 => {
+                // 1NNN - goto
+                self.pc = o & 0x0FFF;
+            }
+            o if o & 0xF000 == 0x2000 => {
                 // 2NNN - subroutine
                 self.stack[self.sp as usize] = self.pc;
                 self.sp += 1;
-                self.pc = opcode & 0x0FFF;
+                self.pc = o & 0x0FFF;
             }
-            0x3000...0x3EFF => {
+            o if o & 0xF000 == 0x3000 => {
                 // 3XNN - Skip the following instruction if the value of register VX equals NN
-                let reg = (opcode & 0x0F00) >> 8;
-                let val = (opcode & 0x00FF) as u8;
+                let reg = (o & 0x0F00) >> 8;
+                let val = (o & 0x00FF) as u8;
 
                 if self.v[reg as usize] == val {
                     self.pc += 4;
@@ -200,10 +205,10 @@ impl Chip8 {
                     self.pc += 2;
                 };
             }
-            0x4000...0x4EFF => {
+            o if o & 0xF000 == 0x4000 => {
                 // 4XNN - Skip the following instruction if the value of register VX is not equal to NN
-                let reg = (opcode & 0x0F00) >> 8;
-                let val = (opcode & 0x00FF) as u8;
+                let reg = (o & 0x0F00) >> 8;
+                let val = (o & 0x00FF) as u8;
 
                 if self.v[reg as usize] != val {
                     self.pc += 4;
@@ -211,34 +216,34 @@ impl Chip8 {
                     self.pc += 2;
                 };
             }
-            0x6000...0x6EFF => {
+            o if o & 0xF000 == 0x6000 => {
                 // 6XNN - store NN in register X
-                let reg = (opcode & 0x0F00) >> 8;
+                let reg = (o & 0x0F00) >> 8;
 
-                self.v[reg as usize] = (opcode & 0x00FF) as u8;
+                self.v[reg as usize] = (o & 0x00FF) as u8;
                 self.pc += 2;
             }
-            0x7000...0x7EFF => {
+            o if o & 0xF000 == 0x7000 => {
                 // 7XNN - Add the value NN to register VX
-                let reg = (opcode & 0x0F00) >> 8;
+                let reg = (o & 0x0F00) >> 8;
 
-                let result_carry = self.v[reg as usize].overflowing_add((opcode & 0x00FF) as u8);
+                let result_carry = self.v[reg as usize].overflowing_add((o & 0x00FF) as u8);
                 self.v[reg as usize] = result_carry.0;
                 self.vf = if result_carry.1 { 1 } else { 0 };
                 self.pc += 2;
             }
-            0xA000...0xAFFF => {
+            o if o & 0xF000 == 0xA000 => {
                 // ANNN - store NNN in I
-                self.i = opcode & 0x0FFF;
+                self.i = o & 0x0FFF;
                 self.pc += 2;
             }
-            0xD000...0xDEEF => {
+            o if o & 0xF000 == 0xD000 => {
                 // DXYN - Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
                 // Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
 
-                let reg_x = (opcode & 0x0F00) >> 8;
-                let reg_y = (opcode & 0x00F0) >> 4;
-                let height = opcode & 0x000F;
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+                let height = o & 0x000F;
                 let mut pixel: u8;
                 self.vf = 0;
 
@@ -262,7 +267,21 @@ impl Chip8 {
 
                 self.pc += 2;
             }
-            _ => panic!("unknown opcode {:x?}", opcode),
+            o if o & 0xF0FF == 0xF01E => {
+                // FX1E - Add the value stored in register VX to register I
+                // NB: should set carry flag if 12-bit limit exceeded for I
+                let reg = (o & 0x0F00) >> 8;
+
+                self.i += self.v[reg as usize] as u16;
+
+                if self.i > 0xFFF {
+                    self.i -= 0x1000;
+                    self.vf = 1;
+                }
+
+                self.pc += 2;
+            }
+            o => panic!("unknown opcode {:x?}", o),
         };
 
         if self.delay_timer > 0 {
