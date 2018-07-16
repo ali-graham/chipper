@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate clap;
+
 extern crate sdl2;
 
 use std::{process, thread};
@@ -12,15 +15,28 @@ use std::fs::File;
 
 mod chip8;
 
-const DISPLAY_SCALE: u32 = 8;
-const DISPLAY_WIDTH: u32 = chip8::SCREEN_WIDTH * DISPLAY_SCALE;
-const DISPLAY_HEIGHT: u32 = chip8::SCREEN_HEIGHT * DISPLAY_SCALE;
+const DEFAULT_DISPLAY_SCALE: u32 = 12;
 
 fn main() {
+    let matches = clap::App::new("chipper")
+                              .version("0.1.0")
+                              .author("Ali Graham <ali.graham@gmail.com>")
+                              .about("Simple CHIP-8 emulator")
+                              .args_from_usage(
+                                  "-f, --file=[file]   'ROM filename to load'
+                                   -s, --scale=[scale]  'Scale factor for the window'")
+                              .get_matches();
+
+    let rom_filename = matches.value_of("file").expect("No ROM filename provided");
+    let scale = value_t!(matches, "scale", u32).unwrap_or(DEFAULT_DISPLAY_SCALE);
+
+    let display_width = chip8::SCREEN_WIDTH * scale;
+    let display_height = chip8::SCREEN_HEIGHT * scale;
+
     let sdl_context = sdl2::init().unwrap();
 
     let video_subsys = sdl_context.video().unwrap();
-    let window = video_subsys.window("chipper", DISPLAY_WIDTH, DISPLAY_HEIGHT)
+    let window = video_subsys.window("chipper", display_width, display_height)
         .position_centered()
         .build()
         .unwrap();
@@ -35,9 +51,7 @@ fn main() {
 
     let mut chip8: chip8::Chip8 = Default::default();
 
-    // FIXME: get filename from CLI argument
-
-    let mut f = File::open("programs/Chip8 Picture.ch8").unwrap();
+    let mut f = File::open(rom_filename).unwrap();
     let mut rom_data = Vec::new();
     f.read_to_end(&mut rom_data).unwrap();
 
@@ -61,8 +75,7 @@ fn main() {
                     } else {
                         canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
                     }
-                    let r = Rect::new((xline * DISPLAY_SCALE) as i32, (yline * DISPLAY_SCALE) as i32, DISPLAY_SCALE, DISPLAY_SCALE);
-                    canvas.draw_rect(r).unwrap();
+                    let r = Rect::new((xline * scale) as i32, (yline * scale) as i32, scale, scale);
                     canvas.fill_rect(r).unwrap();
                 }
             }
