@@ -1,3 +1,5 @@
+extern crate rand;
+
 const CHIP8_FONTSET: [u8; 80] = [
     0xF0,
     0x90,
@@ -299,17 +301,66 @@ impl Chip8 {
                 self.vf = if result_borrow.1 { 0 } else { 1 };
                 self.pc += 2;
             }
-            // TODO: 8XY6
-            // TODO: 8XY7
-            // TODO: 8XYE
-            // TODO: 9XY0
+            o if o & 0xF00F == 0x8006 => {
+                // 8XY6 - Store the value of register VY shifted right one bit in register VX
+                // Set register VF to the least significant bit prior to the shift
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+                let y = self.v[reg_y as usize];
+
+                self.v[reg_x as usize] = y.checked_shr(1).unwrap_or(0);
+                self.vf = y & 0x1;
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x8007 => {
+                // 8XY7 - Subtract value of register VX from value of register VY, result to VX
+                // VF = 1 if no borrow, 0 if there is
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                let result_borrow = self.v[reg_y as usize].overflowing_sub(self.v[reg_x as usize]);
+                self.v[reg_x as usize] = result_borrow.0;
+                self.vf = if result_borrow.1 { 0 } else { 1 };
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x800E => {
+                // 8XYE - Store the value of register VY shifted left one bit in register VX
+                // Set register VF to the most significant bit prior to the shift
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+                let y = self.v[reg_y as usize];
+
+                self.v[reg_x as usize] = y.checked_shl(1).unwrap_or(u8::max_value());
+                self.vf = y & 0x80;
+                self.pc += 2;
+            }
+            o if o & 0xF00F == 0x9000 => {
+                // 9XY0 - Skip the following instruction if the value of register VX does not equal value of register VY
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                if self.v[reg_x as usize] == self.v[reg_y as usize] {
+                    self.pc += 2;
+                } else {
+                    self.pc += 4;
+                };
+            }
             o if o & 0xF000 == 0xA000 => {
                 // ANNN - store NNN in I
                 self.i = o & 0x0FFF;
                 self.pc += 2;
             }
-            // TODO: BNNN
-            // TODO: CXNN
+            o if o & 0xF000 == 0xB000 => {
+                // BNNN - goto NNN + V0
+                self.pc = o + self.v[0] as u16;
+            }
+            o if o & 0xF00 == 0xC000 => {
+                // CXNN - Sets VX to the result of a bitwise and operation on a random number (Typically: 0 to 255) and NN.
+                let reg = (o & 0x0F00) >> 8;
+                let val = (o & 0x00FF) as u8;
+
+                self.v[reg as usize] = val & rand::random::<u8>();
+            }
             o if o & 0xF000 == 0xD000 => {
                 // DXYN - Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
                 // Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
@@ -348,7 +399,7 @@ impl Chip8 {
             // TODO: FX18
             o if o & 0xF0FF == 0xF01E => {
                 // FX1E - Add the value stored in register VX to register I
-                // NB: should set carry flag if 12-bit limit exceeded for I
+                // Sets carry flag if 12-bit limit exceeded for I
                 let reg = (o & 0x0F00) >> 8;
 
                 self.i += self.v[reg as usize] as u16;
