@@ -3,15 +3,15 @@ extern crate clap;
 
 extern crate sdl2;
 
-use std::{process, thread};
-use std::time::{Duration, Instant};
 use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use sdl2::pixels;
 use sdl2::rect::Rect;
-use sdl2::keyboard::Keycode;
+use std::time::{Duration, Instant};
+use std::{process, thread};
 
-use std::io::prelude::*;
 use std::fs::File;
+use std::io::prelude::*;
 
 mod chip8;
 
@@ -19,13 +19,14 @@ const DEFAULT_DISPLAY_SCALE: u32 = 12;
 
 fn main() {
     let matches = clap::App::new("chipper")
-                              .version("0.1.0")
-                              .author("Ali Graham <ali.graham@gmail.com>")
-                              .about("Simple CHIP-8 emulator")
-                              .args_from_usage(
-                                  "-f, --file=[file]   'ROM filename to load'
-                                   -s, --scale=[scale]  'Scale factor for the window'")
-                              .get_matches();
+        .version("0.1.0")
+        .author("Ali Graham <ali.graham@gmail.com>")
+        .about("Simple CHIP-8 emulator")
+        .args_from_usage(
+            "-f, --file=[file]   'ROM filename to load'
+             -s, --scale=[scale]  'Scale factor for the window'",
+        )
+        .get_matches();
 
     let rom_filename = matches.value_of("file").expect("No ROM filename provided");
     let scale = value_t!(matches, "scale", u32).unwrap_or(DEFAULT_DISPLAY_SCALE);
@@ -36,7 +37,8 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
 
     let video_subsys = sdl_context.video().unwrap();
-    let window = video_subsys.window("chipper", display_width, display_height)
+    let window = video_subsys
+        .window("chipper", display_width, display_height)
         .position_centered()
         .build()
         .unwrap();
@@ -85,9 +87,13 @@ fn main() {
 
         for event in events.poll_iter() {
             match event {
-                Event::Quit {..} | Event::KeyDown {keycode: Some(Keycode::Escape), ..} => {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
                     process::exit(1);
-                },
+                }
                 // Event::KeyDown { keycode: Some(Keycode::Left), ..} => {
 
                 // },
@@ -110,5 +116,7 @@ fn main() {
         }
     };
 
-    loop { main_loop(); }
+    loop {
+        main_loop();
+    }
 }

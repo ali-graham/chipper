@@ -1,20 +1,84 @@
 const CHIP8_FONTSET: [u8; 80] = [
-  0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-  0x20, 0x60, 0x20, 0x20, 0x70, // 1
-  0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-  0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-  0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-  0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-  0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-  0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-  0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-  0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-  0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-  0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-  0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-  0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-  0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-  0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    0xF0,
+    0x90,
+    0x90,
+    0x90,
+    0xF0, // 0
+    0x20,
+    0x60,
+    0x20,
+    0x20,
+    0x70, // 1
+    0xF0,
+    0x10,
+    0xF0,
+    0x80,
+    0xF0, // 2
+    0xF0,
+    0x10,
+    0xF0,
+    0x10,
+    0xF0, // 3
+    0x90,
+    0x90,
+    0xF0,
+    0x10,
+    0x10, // 4
+    0xF0,
+    0x80,
+    0xF0,
+    0x10,
+    0xF0, // 5
+    0xF0,
+    0x80,
+    0xF0,
+    0x90,
+    0xF0, // 6
+    0xF0,
+    0x10,
+    0x20,
+    0x40,
+    0x40, // 7
+    0xF0,
+    0x90,
+    0xF0,
+    0x90,
+    0xF0, // 8
+    0xF0,
+    0x90,
+    0xF0,
+    0x10,
+    0xF0, // 9
+    0xF0,
+    0x90,
+    0xF0,
+    0x90,
+    0x90, // A
+    0xE0,
+    0x90,
+    0xE0,
+    0x90,
+    0xE0, // B
+    0xF0,
+    0x80,
+    0x80,
+    0x80,
+    0xF0, // C
+    0xE0,
+    0x90,
+    0x90,
+    0x90,
+    0xE0, // D
+    0xF0,
+    0x80,
+    0xF0,
+    0x80,
+    0xF0, // E
+    0xF0,
+    0x80,
+    0xF0,
+    0x80,
+    0x80, // F
 ];
 
 pub const SCREEN_WIDTH: u32 = 64;
@@ -22,7 +86,7 @@ pub const SCREEN_HEIGHT: u32 = 32;
 
 pub struct Chip8 {
     v: [u8; 15], // registers
-    vf: u8, // carry flag
+    vf: u8,      // carry flag
 
     i: u16, // can only be loaded with a 12-bit address value
 
@@ -46,7 +110,7 @@ pub struct Chip8 {
 
     pub _key: [u8; 16],
 
-    draw: bool
+    draw: bool,
 }
 
 impl Default for Chip8 {
@@ -55,7 +119,7 @@ impl Default for Chip8 {
             v: [0u8; 15],
             vf: 0,
 
-            i:  0,
+            i: 0,
 
             pc: 0,
 
@@ -87,7 +151,7 @@ impl Chip8 {
         // load fontset
         self.memory[0..80].copy_from_slice(&CHIP8_FONTSET[0..80]);
         // rest of memory is zeroed
-        self.memory[80..4096].copy_from_slice(&[0u8;4016]);
+        self.memory[80..4096].copy_from_slice(&[0u8; 4016]);
 
         self.delay_timer = 0;
         self.sound_timer = 0;
@@ -102,7 +166,8 @@ impl Chip8 {
 
     pub fn emulate_cycle(&mut self) {
         // fetch
-        let opcode = ((self.memory[self.pc as usize] as u16) << 8) | (self.memory[(self.pc + 1) as usize] as u16);
+        let opcode = ((self.memory[self.pc as usize] as u16) << 8)
+            | (self.memory[(self.pc + 1) as usize] as u16);
 
         // decode & execute
 
@@ -113,38 +178,46 @@ impl Chip8 {
                 self.draw = true;
 
                 self.pc += 2;
-            },
+            }
             0x1000...0x1FFF => {
                 // 1NNN - goto
                 self.pc = opcode & 0x0FFF;
-            },
+            }
             0x2000...0x2FFF => {
                 // 2NNN - subroutine
                 self.stack[self.sp as usize] = self.pc;
                 self.sp += 1;
                 self.pc = opcode & 0x0FFF;
-            },
+            }
             0x3000...0x3EFF => {
                 // 3XNN - Skip the following instruction if the value of register VX equals NN
                 let reg = (opcode & 0x0F00) >> 8;
                 let val = (opcode & 0x00FF) as u8;
 
-                if self.v[reg as usize] == val { self.pc += 4; } else { self.pc += 2; };
-            },
+                if self.v[reg as usize] == val {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                };
+            }
             0x4000...0x4EFF => {
                 // 4XNN - Skip the following instruction if the value of register VX is not equal to NN
                 let reg = (opcode & 0x0F00) >> 8;
                 let val = (opcode & 0x00FF) as u8;
 
-                if self.v[reg as usize] != val { self.pc += 4; } else { self.pc += 2; };
-            },
+                if self.v[reg as usize] != val {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                };
+            }
             0x6000...0x6EFF => {
                 // 6XNN - store NN in register X
                 let reg = (opcode & 0x0F00) >> 8;
 
                 self.v[reg as usize] = (opcode & 0x00FF) as u8;
                 self.pc += 2;
-            },
+            }
             0x7000...0x7EFF => {
                 // 7XNN - Add the value NN to register VX
                 let reg = (opcode & 0x0F00) >> 8;
@@ -153,12 +226,12 @@ impl Chip8 {
                 self.v[reg as usize] = result_carry.0;
                 self.vf = if result_carry.1 { 1 } else { 0 };
                 self.pc += 2;
-            },
+            }
             0xA000...0xAFFF => {
                 // ANNN - store NNN in I
                 self.i = opcode & 0x0FFF;
                 self.pc += 2;
-            },
+            }
             0xD000...0xDEEF => {
                 // DXYN - Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
                 // Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
@@ -172,8 +245,10 @@ impl Chip8 {
                 for yline in 0..height {
                     pixel = self.memory[(self.i + yline) as usize];
                     for xline in 0..8 {
-                        let offset = (((self.v[reg_x as usize] as u16) + xline +
-                                     (((self.v[reg_y as usize] as u16) + yline) * (SCREEN_WIDTH as u16)))) as usize;
+                        let offset = (((self.v[reg_x as usize] as u16)
+                            + xline
+                            + (((self.v[reg_y as usize] as u16) + yline) * (SCREEN_WIDTH as u16))))
+                            as usize;
                         if (pixel & (0x80 >> xline)) != 0 {
                             if self.gfx[offset] == 1 {
                                 self.vf = 1;
@@ -186,7 +261,7 @@ impl Chip8 {
                 self.draw = true;
 
                 self.pc += 2;
-            },
+            }
             _ => panic!("unknown opcode {:x?}", opcode),
         };
 
