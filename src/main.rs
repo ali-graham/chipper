@@ -94,18 +94,198 @@ fn main() {
                 } => {
                     process::exit(1);
                 }
-                // Event::KeyDown { keycode: Some(Keycode::Left), ..} => {
-
-                // },
-                // Event::KeyDown { keycode: Some(Keycode::Right), ..} => {
-
-                // },
-                // Event::KeyDown { keycode: Some(Keycode::Up), ..} => {
-
-                // },
-                // Event::KeyDown { keycode: Some(Keycode::Down), ..} => {
-
-                // },
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num1),
+                    ..
+                } => {
+                    chip8.key_down(0x0);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num2),
+                    ..
+                } => {
+                    chip8.key_down(0x1);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num3),
+                    ..
+                } => {
+                    chip8.key_down(0x2);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num4),
+                    ..
+                } => {
+                    chip8.key_down(0x3);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Q),
+                    ..
+                } => {
+                    chip8.key_down(0x4);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::W),
+                    ..
+                } => {
+                    chip8.key_down(0x5);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::E),
+                    ..
+                } => {
+                    chip8.key_down(0x6);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::R),
+                    ..
+                } => {
+                    chip8.key_down(0x7);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::A),
+                    ..
+                } => {
+                    chip8.key_down(0x8);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::S),
+                    ..
+                } => {
+                    chip8.key_down(0x9);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::D),
+                    ..
+                } => {
+                    chip8.key_down(0xa);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::F),
+                    ..
+                } => {
+                    chip8.key_down(0xb);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Z),
+                    ..
+                } => {
+                    chip8.key_down(0xc);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::X),
+                    ..
+                } => {
+                    chip8.key_down(0xd);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::C),
+                    ..
+                } => {
+                    chip8.key_down(0xe);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::V),
+                    ..
+                } => {
+                    chip8.key_down(0xf);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::Num1),
+                    ..
+                } => {
+                    chip8.key_up(0x0);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::Num2),
+                    ..
+                } => {
+                    chip8.key_up(0x1);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::Num3),
+                    ..
+                } => {
+                    chip8.key_up(0x2);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::Num4),
+                    ..
+                } => {
+                    chip8.key_up(0x3);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::Q),
+                    ..
+                } => {
+                    chip8.key_up(0x4);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::W),
+                    ..
+                } => {
+                    chip8.key_up(0x5);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::E),
+                    ..
+                } => {
+                    chip8.key_up(0x6);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::R),
+                    ..
+                } => {
+                    chip8.key_up(0x7);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::A),
+                    ..
+                } => {
+                    chip8.key_up(0x8);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::S),
+                    ..
+                } => {
+                    chip8.key_up(0x9);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::D),
+                    ..
+                } => {
+                    chip8.key_up(0xa);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::F),
+                    ..
+                } => {
+                    chip8.key_up(0xb);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::Z),
+                    ..
+                } => {
+                    chip8.key_up(0xc);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::X),
+                    ..
+                } => {
+                    chip8.key_up(0xd);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::C),
+                    ..
+                } => {
+                    chip8.key_up(0xe);
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::V),
+                    ..
+                } => {
+                    chip8.key_up(0xf);
+                }
                 _ => {}
             }
         }

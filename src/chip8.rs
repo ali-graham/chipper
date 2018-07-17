@@ -528,6 +528,11 @@ impl Chip8 {
         self.draw = false;
     }
 
-    // pub fn set_keys(&self) {
-    // }
+    pub fn key_down(&mut self, key_num: u8) {
+        self.key[key_num as usize] = 1;
+    }
+
+    pub fn key_up(&mut self, key_num: u8) {
+        self.key[key_num as usize] = 0;
+    }
 }
