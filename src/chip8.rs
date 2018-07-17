@@ -165,7 +165,7 @@ impl Chip8 {
         self.memory[0x200..(0x200 + rom_data.len())].copy_from_slice(&rom_data);
     }
 
-    pub fn emulate_cycle(&mut self) {
+    pub fn emulate_cycle(&mut self, legacy_mode: bool) {
         let opcode = ((self.memory[self.pc as usize] as u16) << 8)
             | (self.memory[(self.pc + 1) as usize] as u16);
 
@@ -297,24 +297,19 @@ impl Chip8 {
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x8006 => {
-                /*
                 // 8XY6 - Store the value of register VY shifted right one bit in register VX
                 // Set register VF to the least significant bit prior to the shift
+                // NB: modern interpreters seem to operate on reg_x only
                 let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-                let y = self.v[reg_y as usize];
+                let val = if legacy_mode {
+                    let reg_y = (o & 0x00F0) >> 4;
+                    self.v[reg_y as usize]
+                } else {
+                    self.v[reg_x as usize]
+                };
 
-                self.v[reg_x as usize] = y.checked_shr(1).unwrap_or(0);
-                self.v[15] = y & 0x1;
-                self.pc += 2;
-                */
-
-                // modern interpreters seem to operate on reg_x only -- TODO: make this a command-line switch
-                let reg = (o & 0x0F00) >> 8;
-                let x = self.v[reg as usize];
-
-                self.v[reg as usize] = x.checked_shr(1).unwrap_or(0);
-                self.v[15] = x & 0x1;
+                self.v[reg_x as usize] = val.checked_shr(1).unwrap_or(0);
+                self.v[15] = val & 0x1;
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x8007 => {
@@ -329,24 +324,17 @@ impl Chip8 {
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x800E => {
-                /*
-                // 8XYE - Store the value of register VY shifted left one bit in register VX
-                // Set register VF to the most significant bit prior to the shift
                 let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-                let y = self.v[reg_y as usize];
 
-                self.v[reg_x as usize] = y.checked_shl(1).unwrap_or(u8::max_value());
-                self.v[15] = y >> 7;
-                self.pc += 2;
-                */
+                let val = if legacy_mode {
+                    let reg_y = (o & 0x00F0) >> 4;
+                    self.v[reg_y as usize]
+                } else {
+                    self.v[reg_x as usize]
+                };
 
-                // modern interpreters seem to operate on reg_x only -- TODO: make this a command-line switch
-                let reg = (o & 0x0F00) >> 8;
-                let x = self.v[reg as usize];
-
-                self.v[reg as usize] = x.checked_shl(1).unwrap_or(u8::max_value());
-                self.v[15] = x & 0x80;
+                self.v[reg_x as usize] = val.checked_shl(1).unwrap_or(u8::max_value());
+                self.v[15] = val & 0x80;
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x9000 => {

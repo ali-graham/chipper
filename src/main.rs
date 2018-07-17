@@ -25,12 +25,14 @@ fn main() {
         .about("Simple CHIP-8 emulator")
         .args_from_usage(
             "-f, --file=[file]   'ROM filename to load'
-             -s, --scale=[scale] 'Scale factor for the window'",
+             -s, --scale=[scale] 'Scale factor for the window'
+             -l, --legacy        'Use older shift opcodes'",
         )
         .get_matches();
 
     let rom_filename = matches.value_of("file").expect("No ROM filename provided");
     let scale = value_t!(matches, "scale", u32).unwrap_or(DEFAULT_DISPLAY_SCALE);
+    let legacy_mode = matches.is_present("legacy");
 
     let display_width = chip8::SCREEN_WIDTH * scale;
     let display_height = chip8::SCREEN_HEIGHT * scale;
@@ -71,7 +73,7 @@ fn main() {
     let mut main_loop = || {
         start = Instant::now();
 
-        chip8.emulate_cycle();
+        chip8.emulate_cycle(legacy_mode);
 
         if chip8.graphics_needs_refresh() {
             for yline in 0..chip8::SCREEN_HEIGHT {
