@@ -87,8 +87,7 @@ pub const SCREEN_WIDTH: u32 = 64;
 pub const SCREEN_HEIGHT: u32 = 32;
 
 pub struct Chip8 {
-    v: [u8; 15], // registers
-    vf: u8,      // carry flag
+    v: [u8; 16], // registers
 
     i: u16, // can only be loaded with a 12-bit address value
 
@@ -110,7 +109,7 @@ pub struct Chip8 {
     stack: [u16; 16],
     sp: u16,
 
-    pub key: [u8; 16],
+    key: [u8; 16],
 
     draw: bool,
 }
@@ -118,8 +117,7 @@ pub struct Chip8 {
 impl Default for Chip8 {
     fn default() -> Chip8 {
         Chip8 {
-            v: [0u8; 15],
-            vf: 0,
+            v: [0u8; 16],
 
             i: 0,
 
@@ -147,13 +145,14 @@ impl Chip8 {
         self.gfx = [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
         self.stack = [0u16; 16];
 
-        self.v = [0u8; 15];
-        self.vf = 0;
+        self.v = [0u8; 16];
 
         // load fontset
         self.memory[0..80].copy_from_slice(&CHIP8_FONTSET[0..80]);
         // rest of memory is zeroed
         self.memory[80..4096].copy_from_slice(&[0u8; 4016]);
+
+        self.key = [0u8; 16];
 
         self.delay_timer = 0;
         self.sound_timer = 0;
@@ -169,8 +168,6 @@ impl Chip8 {
     pub fn emulate_cycle(&mut self) {
         let opcode = ((self.memory[self.pc as usize] as u16) << 8)
             | (self.memory[(self.pc + 1) as usize] as u16);
-
-        // println!("pc {:x?}, opcode {:x?}", self.pc, opcode);
 
         match opcode {
             0x00E0 => {
@@ -238,12 +235,11 @@ impl Chip8 {
                 self.pc += 2;
             }
             o if o & 0xF000 == 0x7000 => {
-                // 7XNN - Add the value NN to register VX
+                // 7XNN - Add the value NN to register VX (carry flag is not changed)
                 let reg = (o & 0x0F00) >> 8;
 
                 let result_carry = self.v[reg as usize].overflowing_add((o & 0x00FF) as u8);
                 self.v[reg as usize] = result_carry.0;
-                self.vf = if result_carry.1 { 1 } else { 0 };
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x8000 => {
@@ -286,7 +282,7 @@ impl Chip8 {
 
                 let result_carry = self.v[reg_x as usize].overflowing_add(self.v[reg_y as usize]);
                 self.v[reg_x as usize] = result_carry.0;
-                self.vf = if result_carry.1 { 1 } else { 0 };
+                self.v[15] = if result_carry.1 { 1 } else { 0 };
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x8005 => {
@@ -297,10 +293,11 @@ impl Chip8 {
 
                 let result_borrow = self.v[reg_x as usize].overflowing_sub(self.v[reg_y as usize]);
                 self.v[reg_x as usize] = result_borrow.0;
-                self.vf = if result_borrow.1 { 0 } else { 1 };
+                self.v[15] = if result_borrow.1 { 0 } else { 1 };
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x8006 => {
+                /*
                 // 8XY6 - Store the value of register VY shifted right one bit in register VX
                 // Set register VF to the least significant bit prior to the shift
                 let reg_x = (o & 0x0F00) >> 8;
@@ -308,7 +305,16 @@ impl Chip8 {
                 let y = self.v[reg_y as usize];
 
                 self.v[reg_x as usize] = y.checked_shr(1).unwrap_or(0);
-                self.vf = y & 0x1;
+                self.v[15] = y & 0x1;
+                self.pc += 2;
+                */
+
+                // modern interpreters seem to operate on reg_x only -- TODO: make this a command-line switch
+                let reg = (o & 0x0F00) >> 8;
+                let x = self.v[reg as usize];
+
+                self.v[reg as usize] = x.checked_shr(1).unwrap_or(0);
+                self.v[15] = x & 0x1;
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x8007 => {
@@ -319,10 +325,11 @@ impl Chip8 {
 
                 let result_borrow = self.v[reg_y as usize].overflowing_sub(self.v[reg_x as usize]);
                 self.v[reg_x as usize] = result_borrow.0;
-                self.vf = if result_borrow.1 { 0 } else { 1 };
+                self.v[15] = if result_borrow.1 { 0 } else { 1 };
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x800E => {
+                /*
                 // 8XYE - Store the value of register VY shifted left one bit in register VX
                 // Set register VF to the most significant bit prior to the shift
                 let reg_x = (o & 0x0F00) >> 8;
@@ -330,7 +337,16 @@ impl Chip8 {
                 let y = self.v[reg_y as usize];
 
                 self.v[reg_x as usize] = y.checked_shl(1).unwrap_or(u8::max_value());
-                self.vf = y & 0x80;
+                self.v[15] = y >> 7;
+                self.pc += 2;
+                */
+
+                // modern interpreters seem to operate on reg_x only -- TODO: make this a command-line switch
+                let reg = (o & 0x0F00) >> 8;
+                let x = self.v[reg as usize];
+
+                self.v[reg as usize] = x.checked_shl(1).unwrap_or(u8::max_value());
+                self.v[15] = x & 0x80;
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x9000 => {
@@ -353,7 +369,7 @@ impl Chip8 {
                 // BNNN - goto NNN + V0
                 self.pc = o + self.v[0] as u16;
             }
-            o if o & 0xF00 == 0xC000 => {
+            o if o & 0xF000 == 0xC000 => {
                 // CXNN - Sets VX to the result of a bitwise and operation on a random number (Typically: 0 to 255) and NN.
                 let reg = (o & 0x0F00) >> 8;
                 let val = (o & 0x00FF) as u8;
@@ -368,7 +384,7 @@ impl Chip8 {
                 let reg_y = (o & 0x00F0) >> 4;
                 let height = o & 0x000F;
                 let mut pixel: u8;
-                self.vf = 0;
+                self.v[15] = 0;
 
                 for yline in 0..height {
                     pixel = self.memory[(self.i + yline) as usize];
@@ -379,7 +395,7 @@ impl Chip8 {
                             as usize;
                         if (pixel & (0x80 >> xline)) != 0 {
                             if self.gfx[offset] == 1 {
-                                self.vf = 1;
+                                self.v[15] = 1;
                             }
                             self.gfx[offset] ^= 1;
                         }
@@ -406,10 +422,10 @@ impl Chip8 {
                 // value currently stored in register VX is not pressed
                 let reg = (o & 0x0F00) >> 8;
 
-                if self.key[self.v[reg as usize] as usize] == 1 {
-                    self.pc += 2;
-                } else {
+                if self.key[self.v[reg as usize] as usize] == 0 {
                     self.pc += 4;
+                } else {
+                    self.pc += 2;
                 };
             }
             o if o & 0xF0FF == 0xF007 => {
@@ -423,14 +439,13 @@ impl Chip8 {
                 // FX0A - Wait for a keypress and store the result in register VX
                 let reg = (o & 0x0F00) >> 8;
 
-                match self.key.iter().position(|&x| x != 0) {
-                    Some(pressed) => {
-                        self.v[reg as usize] = pressed as u8;
-                        self.key[pressed] = 0;
+                match self.key.iter().position(|&k| { k == 1 }) {
+                    Some(num) => {
+                        self.v[reg as usize] = num as u8;
 
                         self.pc += 2;
-                    }
-                    None => {} // don't advance program counter
+                    },
+                    None => {}
                 }
             }
             o if o & 0xF0FF == 0xF015 => {
@@ -456,7 +471,7 @@ impl Chip8 {
 
                 if self.i > 0xFFF {
                     self.i -= 0x1000;
-                    self.vf = 1;
+                    self.v[15] = 1;
                 }
 
                 self.pc += 2;
