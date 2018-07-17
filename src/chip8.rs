@@ -426,6 +426,7 @@ impl Chip8 {
                 match self.key.iter().position(|&x| x != 0) {
                     Some(pressed) => {
                         self.v[reg as usize] = pressed as u8;
+                        self.key[pressed] = 0;
 
                         self.pc += 2;
                     }
@@ -513,9 +514,6 @@ impl Chip8 {
         }
 
         if self.sound_timer > 0 {
-            if self.sound_timer == 1 {
-                println!("BEEP");
-            }
             self.sound_timer -= 1;
         }
     }
@@ -534,5 +532,9 @@ impl Chip8 {
 
     pub fn key_up(&mut self, key_num: u8) {
         self.key[key_num as usize] = 0;
+    }
+
+    pub fn audio_sound(&self) -> bool {
+        return self.sound_timer > 0;
     }
 }

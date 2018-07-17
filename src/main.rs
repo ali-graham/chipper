@@ -14,6 +14,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 mod chip8;
+mod audio;
 
 const DEFAULT_DISPLAY_SCALE: u32 = 12;
 
@@ -52,12 +53,15 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut chip8: chip8::Chip8 = Default::default();
+    let mut audio: audio::Audio = Default::default();
 
     let mut f = File::open(rom_filename).unwrap();
     let mut rom_data = Vec::new();
     f.read_to_end(&mut rom_data).unwrap();
 
     chip8.initialize();
+    audio.initialize(&sdl_context);
+
     chip8.load_rom(&rom_data);
 
     // unnecessary init, but compiler complains
@@ -98,25 +102,25 @@ fn main() {
                     keycode: Some(Keycode::Num1),
                     ..
                 } => {
-                    chip8.key_down(0x0);
+                    chip8.key_down(0x1);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Num2),
                     ..
                 } => {
-                    chip8.key_down(0x1);
+                    chip8.key_down(0x2);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Num3),
                     ..
                 } => {
-                    chip8.key_down(0x2);
+                    chip8.key_down(0x3);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Num4),
                     ..
                 } => {
-                    chip8.key_down(0x3);
+                    chip8.key_down(0xc);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Q),
@@ -140,49 +144,49 @@ fn main() {
                     keycode: Some(Keycode::R),
                     ..
                 } => {
-                    chip8.key_down(0x7);
+                    chip8.key_down(0xd);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
-                    chip8.key_down(0x8);
+                    chip8.key_down(0x7);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::S),
                     ..
                 } => {
-                    chip8.key_down(0x9);
+                    chip8.key_down(0x8);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
-                    chip8.key_down(0xa);
+                    chip8.key_down(0x9);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::F),
                     ..
                 } => {
-                    chip8.key_down(0xb);
+                    chip8.key_down(0xe);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Z),
                     ..
                 } => {
-                    chip8.key_down(0xc);
+                    chip8.key_down(0xa);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::X),
                     ..
                 } => {
-                    chip8.key_down(0xd);
+                    chip8.key_down(0x0);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::C),
                     ..
                 } => {
-                    chip8.key_down(0xe);
+                    chip8.key_down(0xb);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::V),
@@ -194,25 +198,25 @@ fn main() {
                     keycode: Some(Keycode::Num1),
                     ..
                 } => {
-                    chip8.key_up(0x0);
+                    chip8.key_up(0x1);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Num2),
                     ..
                 } => {
-                    chip8.key_up(0x1);
+                    chip8.key_up(0x2);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Num3),
                     ..
                 } => {
-                    chip8.key_up(0x2);
+                    chip8.key_up(0x3);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Num4),
                     ..
                 } => {
-                    chip8.key_up(0x3);
+                    chip8.key_up(0xc);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Q),
@@ -236,49 +240,49 @@ fn main() {
                     keycode: Some(Keycode::R),
                     ..
                 } => {
-                    chip8.key_up(0x7);
+                    chip8.key_up(0xd);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
-                    chip8.key_up(0x8);
+                    chip8.key_up(0x7);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::S),
                     ..
                 } => {
-                    chip8.key_up(0x9);
+                    chip8.key_up(0x8);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
-                    chip8.key_up(0xa);
+                    chip8.key_up(0x9);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::F),
                     ..
                 } => {
-                    chip8.key_up(0xb);
+                    chip8.key_up(0xe);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Z),
                     ..
                 } => {
-                    chip8.key_up(0xc);
+                    chip8.key_up(0xa);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::X),
                     ..
                 } => {
-                    chip8.key_up(0xd);
+                    chip8.key_up(0x0);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::C),
                     ..
                 } => {
-                    chip8.key_up(0xe);
+                    chip8.key_up(0xb);
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::V),
