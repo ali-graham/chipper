@@ -16,7 +16,7 @@ use std::io::prelude::*;
 mod chip8;
 mod audio;
 
-const DEFAULT_DISPLAY_SCALE: u32 = 12;
+const DEFAULT_DISPLAY_SCALE: u8 = 12;
 
 fn main() {
     let matches = clap::App::new("chipper")
@@ -31,17 +31,17 @@ fn main() {
         .get_matches();
 
     let rom_filename = matches.value_of("file").expect("No ROM filename provided");
-    let scale = value_t!(matches, "scale", u32).unwrap_or(DEFAULT_DISPLAY_SCALE);
+    let scale = value_t!(matches, "scale", u8).unwrap_or(DEFAULT_DISPLAY_SCALE);
     let legacy_mode = matches.is_present("legacy");
-
-    let display_width = chip8::SCREEN_WIDTH * scale;
-    let display_height = chip8::SCREEN_HEIGHT * scale;
 
     let sdl_context = sdl2::init().unwrap();
 
     let video_subsys = sdl_context.video().unwrap();
     let window = video_subsys
-        .window("chipper", display_width, display_height)
+        .window("chipper",
+            (chip8::SCREEN_WIDTH as u32) * (scale as u32),
+            (chip8::SCREEN_HEIGHT as u32) * (scale as u32)
+        )
         .position_centered()
         .build()
         .unwrap();
@@ -78,12 +78,12 @@ fn main() {
         if chip8.graphics_needs_refresh() {
             for yline in 0..chip8::SCREEN_HEIGHT {
                 for xline in 0..chip8::SCREEN_WIDTH {
-                    if chip8.gfx[((yline * chip8::SCREEN_WIDTH) + xline) as usize] == 1 {
+                    if chip8.gfx[((yline as u16 * chip8::SCREEN_WIDTH as u16) + xline as u16) as usize] == 1 {
                         canvas.set_draw_color(pixels::Color::RGB(255, 255, 255));
                     } else {
                         canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
                     }
-                    let r = Rect::new((xline * scale) as i32, (yline * scale) as i32, scale, scale);
+                    let r = Rect::new(xline as i32 * scale as i32, yline as i32 * scale as i32, scale as u32, scale as u32);
                     canvas.fill_rect(r).unwrap();
                 }
             }

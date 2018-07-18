@@ -83,8 +83,8 @@ const CHIP8_FONTSET: [u8; 80] = [
     0x80, // F
 ];
 
-pub const SCREEN_WIDTH: u32 = 64;
-pub const SCREEN_HEIGHT: u32 = 32;
+pub const SCREEN_WIDTH: u8 = 64;
+pub const SCREEN_HEIGHT: u8 = 32;
 
 pub struct Chip8 {
     v: [u8; 16], // registers
@@ -99,7 +99,7 @@ pub struct Chip8 {
     // 0x390-0xFFF - 'variables and display refresh'
     memory: [u8; 4096],
 
-    pub gfx: [u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
+    pub gfx: [u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize],
 
     delay_timer: u8,
 
@@ -128,7 +128,7 @@ impl Default for Chip8 {
             memory: [0u8; 4096],
             stack: [0u16; 16],
             sp: 0,
-            gfx: [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
+            gfx: [0u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize],
             key: [0u8; 16],
 
             draw: true,
@@ -142,7 +142,7 @@ impl Chip8 {
         self.i = 0;
         self.sp = 0;
 
-        self.gfx = [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
+        self.gfx = [0u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize];
         self.stack = [0u16; 16];
 
         self.v = [0u8; 16];
@@ -172,7 +172,7 @@ impl Chip8 {
         match opcode {
             0x00E0 => {
                 // 00E0 - clear the screen
-                self.gfx = [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
+                self.gfx = [0u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize];
                 self.draw = true;
 
                 self.pc += 2;
