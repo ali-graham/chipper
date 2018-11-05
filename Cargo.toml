@@ -5,5 +5,5 @@ authors = ["Ali Graham <ali.graham@gmail.com>"]
 
 [dependencies]
 clap = "~2.32"
-rand = "0.5.4"
-sdl2 = "0.31.0"
+rand = "0.5.5"
+sdl2 = "0.32.0-beta.2"
