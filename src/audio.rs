@@ -5,7 +5,7 @@ use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioStatus};
 pub struct SquareWave {
     phase_inc: f32,
     phase: f32,
-    volume: f32
+    volume: f32,
 }
 
 impl AudioCallback for SquareWave {
@@ -24,28 +24,31 @@ impl AudioCallback for SquareWave {
     }
 }
 
-
 pub struct Audio {
-    device: AudioDevice<SquareWave>
+    device: AudioDevice<SquareWave>,
 }
 
 impl Audio {
     pub fn new(context: &sdl2::Sdl) -> Audio {
         let desired_spec = AudioSpecDesired {
             freq: Some(44100),
-            channels: Some(1),  // mono
-            samples: None       // default sample size
+            channels: Some(1), // mono
+            samples: None,     // default sample size
         };
 
         return Audio {
-            device: context.audio().unwrap().open_playback(None, &desired_spec, |spec| {
-                // initialize the audio callback
-                SquareWave {
-                    phase_inc: 440.0 / spec.freq as f32,
-                    phase: 0.0,
-                    volume: 0.25
-                }
-            }).unwrap()
+            device: context
+                .audio()
+                .unwrap()
+                .open_playback(None, &desired_spec, |spec| {
+                    // initialize the audio callback
+                    SquareWave {
+                        phase_inc: 440.0 / spec.freq as f32,
+                        phase: 0.0,
+                        volume: 0.25,
+                    }
+                })
+                .unwrap(),
         };
     }
 

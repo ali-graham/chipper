@@ -15,8 +15,8 @@ use std::{process, thread};
 use std::fs::File;
 use std::io::prelude::*;
 
-mod chip8;
 mod audio;
+mod chip8;
 
 const DEFAULT_DISPLAY_SCALE: u8 = 12;
 
@@ -40,9 +40,10 @@ fn main() {
 
     let video_subsys = sdl_context.video().unwrap();
     let window = video_subsys
-        .window("chipper",
+        .window(
+            "chipper",
             (chip8::SCREEN_WIDTH as u32) * (scale as u32),
-            (chip8::SCREEN_HEIGHT as u32) * (scale as u32)
+            (chip8::SCREEN_HEIGHT as u32) * (scale as u32),
         )
         .position_centered()
         .build()
@@ -57,7 +58,6 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut chip8: chip8::Chip8 = Default::default();
-
 
     let mut f = File::open(rom_filename).unwrap();
     let mut rom_data = Vec::new();
@@ -80,12 +80,20 @@ fn main() {
         if chip8.graphics_needs_refresh() {
             for yline in 0..chip8::SCREEN_HEIGHT {
                 for xline in 0..chip8::SCREEN_WIDTH {
-                    if chip8.gfx[((yline as u16 * chip8::SCREEN_WIDTH as u16) + xline as u16) as usize] == 1 {
+                    if chip8.gfx
+                        [((yline as u16 * chip8::SCREEN_WIDTH as u16) + xline as u16) as usize]
+                        == 1
+                    {
                         canvas.set_draw_color(pixels::Color::RGB(255, 255, 255));
                     } else {
                         canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
                     }
-                    let r = Rect::new(xline as i32 * scale as i32, yline as i32 * scale as i32, scale as u32, scale as u32);
+                    let r = Rect::new(
+                        xline as i32 * scale as i32,
+                        yline as i32 * scale as i32,
+                        scale as u32,
+                        scale as u32,
+                    );
                     canvas.fill_rect(r).unwrap();
                 }
             }
