@@ -57,16 +57,8 @@ impl Audio {
         self.device.pause();
     }
 
-    pub fn status(&mut self) -> AudioStatus {
-        self.device.status()
-    }
-
     pub fn playing(&mut self) -> bool {
         self.device.status() == AudioStatus::Playing
-    }
-
-    pub fn stopped(&mut self) -> bool {
-        self.device.status() == AudioStatus::Stopped
     }
 
     pub fn paused(&mut self) -> bool {
