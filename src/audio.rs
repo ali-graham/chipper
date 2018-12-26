@@ -1,9 +1,8 @@
 extern crate sdl2;
 
-use sdl2::AudioSubsystem;
-use sdl2::audio::{AudioCallback, AudioSpecDesired};
+use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioStatus};
 
-struct SquareWave {
+pub struct SquareWave {
     phase_inc: f32,
     phase: f32,
     volume: f32
@@ -27,32 +26,50 @@ impl AudioCallback for SquareWave {
 
 
 pub struct Audio {
-    subsystem: Result<AudioSubsystem, String>,
-    desired_spec: AudioSpecDesired
-}
-
-impl Default for Audio {
-    fn default() -> Audio {
-        Audio {
-            subsystem: Err("Not initialized".to_string()),
-            desired_spec: AudioSpecDesired {
-                freq: Some(44100),
-                channels: Some(1),  // mono
-                samples: None       // default sample size
-            }
-        }
-    }
+    device: AudioDevice<SquareWave>
 }
 
 impl Audio {
-    pub fn initialize(&mut self, context: &sdl2::Sdl) {
-        self.subsystem = context.audio();
+    pub fn new(context: &sdl2::Sdl) -> Audio {
+        let desired_spec = AudioSpecDesired {
+            freq: Some(44100),
+            channels: Some(1),  // mono
+            samples: None       // default sample size
+        };
 
-        match self.subsystem {
-            Ok(ref _ss) => {
+        return Audio {
+            device: context.audio().unwrap().open_playback(None, &desired_spec, |spec| {
+                // initialize the audio callback
+                SquareWave {
+                    phase_inc: 440.0 / spec.freq as f32,
+                    phase: 0.0,
+                    volume: 0.25
+                }
+            }).unwrap()
+        };
+    }
 
-            },
-            Err(ref s) => println!("{}", s)
-        }
+    pub fn play(&mut self) {
+        self.device.resume();
+    }
+
+    pub fn pause(&mut self) {
+        self.device.pause();
+    }
+
+    pub fn status(&mut self) -> AudioStatus {
+        self.device.status()
+    }
+
+    pub fn playing(&mut self) -> bool {
+        self.device.status() == AudioStatus::Playing
+    }
+
+    pub fn stopped(&mut self) -> bool {
+        self.device.status() == AudioStatus::Stopped
+    }
+
+    pub fn paused(&mut self) -> bool {
+        self.device.status() == AudioStatus::Paused
     }
 }

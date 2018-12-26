@@ -57,14 +57,14 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut chip8: chip8::Chip8 = Default::default();
-    let mut audio: audio::Audio = Default::default();
+
 
     let mut f = File::open(rom_filename).unwrap();
     let mut rom_data = Vec::new();
     f.read_to_end(&mut rom_data).unwrap();
 
     chip8.initialize();
-    audio.initialize(&sdl_context);
+    let mut audio = audio::Audio::new(&sdl_context);
 
     chip8.load_rom(&rom_data);
 
@@ -91,6 +91,14 @@ fn main() {
             }
             canvas.present();
             chip8.graphics_clear_refresh();
+        }
+
+        if chip8.audio_sound() {
+            if audio.paused() {
+                audio.play();
+            }
+        } else if audio.playing() {
+            audio.pause();
         }
 
         for event in events.poll_iter() {
