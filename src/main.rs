@@ -120,96 +120,112 @@ fn main() {
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Num1),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x1);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Num2),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x2);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Num3),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x3);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Num4),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0xc);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Q),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x4);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::W),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x5);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::E),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x6);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0xd);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::A),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x7);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::S),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x8);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::D),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x9);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::F),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0xe);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Z),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0xa);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::X),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0x0);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::C),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0xb);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::V),
+                    repeat: false,
                     ..
                 } => {
                     chip8.key_down(0xf);
