@@ -68,14 +68,27 @@ fn main() {
 
     chip8.load_rom(&rom_data);
 
-    // unnecessary init, but compiler complains
-    let mut start = Instant::now();
+    let mut start: Option<Instant> = None;
     let tick = Duration::from_millis(1000 / 60);
 
     let mut main_loop = || {
-        start = Instant::now();
+        start = Some(Instant::now());
+        let mut cycles = 0;
 
-        chip8.emulate_cycle(legacy_mode);
+        loop {
+            chip8.emulate_cycle(legacy_mode);
+            cycles += 1;
+
+            match tick.checked_sub(start.unwrap().elapsed()) {
+                Some(remaining) => {
+                    if cycles > 4 {
+                        thread::sleep(remaining);
+                        break;
+                    }
+                }
+                None => break,
+            }
+        }
 
         if chip8.graphics_needs_refresh() {
             for yline in 0..chip8::SCREEN_HEIGHT {
@@ -328,11 +341,6 @@ fn main() {
                 }
                 _ => {}
             }
-        }
-
-        match tick.checked_sub(start.elapsed()) {
-            Some(remaining) => thread::sleep(remaining),
-            None => {}
         }
     };
 
