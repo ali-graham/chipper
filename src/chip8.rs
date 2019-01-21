@@ -35,7 +35,7 @@ pub struct Chip8 {
     // 0x390-0xFFF - 'variables and display refresh'
     memory: [u8; 4096],
 
-    pub gfx: [u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize],
+    pub gfx: Vec<u8>,
 
     delay_timer: u8,
 
@@ -64,7 +64,9 @@ impl Default for Chip8 {
             memory: [0u8; 4096],
             stack: [0u16; 16],
             sp: 0,
-            gfx: [0u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize],
+
+            gfx: Vec::new(),
+
             key: [0u8; 16],
 
             draw: true,
@@ -78,7 +80,9 @@ impl Chip8 {
         self.i = 0;
         self.sp = 0;
 
-        self.gfx = [0u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize];
+        self.gfx = Vec::with_capacity(usize::from(SCREEN_WIDTH) * usize::from(SCREEN_HEIGHT));
+        self.gfx.resize(self.gfx.capacity(), 0);
+
         self.stack = [0u16; 16];
 
         self.v = [0u8; 16];
@@ -102,13 +106,14 @@ impl Chip8 {
     }
 
     pub fn emulate_cycle(&mut self, legacy_mode: bool) {
-        let opcode = ((self.memory[self.pc as usize] as u16) << 8)
-            | (self.memory[(self.pc + 1) as usize] as u16);
+        let opcode = (u16::from(self.memory[self.pc as usize]) << 8)
+            | u16::from(self.memory[(self.pc + 1) as usize]);
 
         match opcode {
             0x00E0 => {
                 // 00E0 - clear the screen
-                self.gfx = [0u8; ((SCREEN_WIDTH as u16) * (SCREEN_HEIGHT as u16)) as usize];
+                self.gfx = Vec::with_capacity(usize::from(SCREEN_WIDTH) * usize::from(SCREEN_HEIGHT));
+                self.gfx.resize(self.gfx.capacity(), 0);
                 self.draw = true;
 
                 self.pc += 2;
@@ -291,7 +296,7 @@ impl Chip8 {
             }
             o if o & 0xF000 == 0xB000 => {
                 // BNNN - goto NNN + V0
-                self.pc = o + self.v[0] as u16;
+                self.pc = o + u16::from(self.v[0]);
             }
             o if o & 0xF000 == 0xC000 => {
                 // CXNN - Sets VX to the result of a bitwise and operation on a random number (Typically: 0 to 255) and NN.
@@ -313,9 +318,9 @@ impl Chip8 {
                 for yline in 0..height {
                     pixel = self.memory[(self.i + yline) as usize];
                     for xline in 0..8 {
-                        let offset = ((self.v[reg_x as usize] as u16)
+                        let offset = (u16::from(self.v[reg_x as usize])
                             + xline
-                            + (((self.v[reg_y as usize] as u16) + yline) * (SCREEN_WIDTH as u16)))
+                            + (u16::from(self.v[reg_y as usize]) + yline) * u16::from(SCREEN_WIDTH))
                             as usize;
                         if (pixel & (0x80 >> xline)) != 0 {
                             if self.gfx[offset] == 1 {
@@ -363,13 +368,10 @@ impl Chip8 {
                 // FX0A - Wait for a keypress and store the result in register VX
                 let reg = (o & 0x0F00) >> 8;
 
-                match self.key.iter().position(|&k| k == 1) {
-                    Some(num) => {
-                        self.v[reg as usize] = num as u8;
+                if let Some(num) = self.key.iter().position(|&k| k == 1) {
+                    self.v[reg as usize] = num as u8;
 
-                        self.pc += 2;
-                    }
-                    None => {}
+                    self.pc += 2;
                 }
             }
             o if o & 0xF0FF == 0xF015 => {
@@ -391,7 +393,7 @@ impl Chip8 {
                 // Sets carry flag if 12-bit limit exceeded for I
                 let reg = (o & 0x0F00) >> 8;
 
-                self.i += self.v[reg as usize] as u16;
+                self.i += u16::from(self.v[reg as usize]);
 
                 if self.i > 0xFFF {
                     self.i -= 0x1000;
@@ -406,7 +408,7 @@ impl Chip8 {
                 let reg = (o & 0x0F00) >> 8;
 
                 // TODO: error if register value > 0x0F
-                self.i = (5 * self.v[reg as usize]) as u16;
+                self.i = u16::from(5 * self.v[reg as usize]);
 
                 self.pc += 2;
             }
@@ -458,7 +460,7 @@ impl Chip8 {
     }
 
     pub fn graphics_needs_refresh(&self) -> bool {
-        return self.draw;
+        self.draw
     }
 
     pub fn graphics_clear_refresh(&mut self) {
@@ -474,6 +476,6 @@ impl Chip8 {
     }
 
     pub fn audio_sound(&self) -> bool {
-        return self.sound_timer > 0;
+        self.sound_timer > 0
     }
 }

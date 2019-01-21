@@ -42,8 +42,8 @@ fn main() {
     let window = video_subsys
         .window(
             "chipper",
-            (chip8::SCREEN_WIDTH as u32) * (scale as u32),
-            (chip8::SCREEN_HEIGHT as u32) * (scale as u32),
+            u32::from(chip8::SCREEN_WIDTH) * u32::from(scale),
+            u32::from(chip8::SCREEN_HEIGHT) * u32::from(scale),
         )
         .position_centered()
         .build()
@@ -93,8 +93,8 @@ fn main() {
         if chip8.graphics_needs_refresh() {
             for yline in 0..chip8::SCREEN_HEIGHT {
                 for xline in 0..chip8::SCREEN_WIDTH {
-                    if chip8.gfx
-                        [((yline as u16 * chip8::SCREEN_WIDTH as u16) + xline as u16) as usize]
+                    if chip8.gfx.as_slice()
+                        [((u16::from(yline) * u16::from(chip8::SCREEN_WIDTH)) + u16::from(xline)) as usize]
                         == 1
                     {
                         canvas.set_draw_color(pixels::Color::RGB(255, 255, 255));
@@ -102,10 +102,10 @@ fn main() {
                         canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
                     }
                     let r = Rect::new(
-                        xline as i32 * scale as i32,
-                        yline as i32 * scale as i32,
-                        scale as u32,
-                        scale as u32,
+                        i32::from(xline) * i32::from(scale),
+                        i32::from(yline) * i32::from(scale),
+                        u32::from(scale),
+                        u32::from(scale),
                     );
                     canvas.fill_rect(r).unwrap();
                 }

@@ -2,7 +2,7 @@ extern crate sdl2;
 
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioStatus};
 
-pub struct SquareWave {
+struct SquareWave {
     phase_inc: f32,
     phase: f32,
     volume: f32,
@@ -36,7 +36,7 @@ impl Audio {
             samples: None,     // default sample size
         };
 
-        return Audio {
+        Audio {
             device: context
                 .audio()
                 .unwrap()
@@ -49,7 +49,7 @@ impl Audio {
                     }
                 })
                 .unwrap(),
-        };
+        }
     }
 
     pub fn play(&mut self) {
