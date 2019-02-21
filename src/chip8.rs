@@ -380,7 +380,7 @@ impl Chip8 {
                 self.v[reg_x as usize] = val.checked_shl(1).unwrap_or(u8::max_value());
                 self.v[15] = val & 0x80;
             }
-            o => panic!("unknown opcode {:x?}", o)
+            o => panic!("unknown opcode {:x?}", o),
         };
     }
 
@@ -436,7 +436,6 @@ impl Chip8 {
                 self.memory[self.i as usize] = hundreds;
                 self.memory[(self.i + 1) as usize] = tens;
                 self.memory[(self.i + 2) as usize] = ones;
-
             }
             o if o & 0xF0FF == 0xF055 => {
                 // FX55 - Store the values of registers V0 to VX inclusive in memory starting at address I
@@ -454,7 +453,7 @@ impl Chip8 {
                     .copy_from_slice(&self.memory[(self.i as usize)..=(self.i + reg_num) as usize]);
                 self.i += reg_num + 1;
             }
-            o => panic!("unknown opcode {:x?}", o)
+            o => panic!("unknown opcode {:x?}", o),
         }
     }
 

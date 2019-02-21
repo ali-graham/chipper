@@ -95,10 +95,7 @@ fn main() {
         if chip8.graphics_needs_refresh() {
             for yline in 0..chip8::SCREEN_HEIGHT {
                 for xline in 0..chip8::SCREEN_WIDTH {
-                    if chip8.gfx
-                        [((yline * chip8::SCREEN_WIDTH) + xline) as usize]
-                        == 1
-                    {
+                    if chip8.gfx[((yline * chip8::SCREEN_WIDTH) + xline) as usize] == 1 {
                         canvas.set_draw_color(pixels::Color::RGB(255, 255, 255));
                     } else {
                         canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
