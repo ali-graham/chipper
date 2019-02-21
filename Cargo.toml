@@ -5,6 +5,6 @@ authors = ["Ali Graham <ali.graham@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-clap = "~2.32"
+clap = "~2.32.0"
 rand = "0.6.1"
 sdl2 = "0.32.0"
