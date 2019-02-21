@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![deny(clippy::all)]
 
 #[macro_use]
 extern crate clap;
@@ -77,6 +78,7 @@ fn main() {
 
         loop {
             chip8.emulate_cycle(legacy_mode);
+            chip8.update_timers();
             cycles += 1;
 
             match tick.checked_sub(start.unwrap().elapsed()) {
@@ -93,8 +95,8 @@ fn main() {
         if chip8.graphics_needs_refresh() {
             for yline in 0..chip8::SCREEN_HEIGHT {
                 for xline in 0..chip8::SCREEN_WIDTH {
-                    if chip8.gfx.as_slice()
-                        [((u16::from(yline) * u16::from(chip8::SCREEN_WIDTH)) + u16::from(xline)) as usize]
+                    if chip8.gfx
+                        [((yline * chip8::SCREEN_WIDTH) + xline) as usize]
                         == 1
                     {
                         canvas.set_draw_color(pixels::Color::RGB(255, 255, 255));

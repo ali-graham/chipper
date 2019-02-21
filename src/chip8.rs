@@ -19,8 +19,8 @@ const CHIP8_FONTSET: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
-pub const SCREEN_WIDTH: u8 = 64;
-pub const SCREEN_HEIGHT: u8 = 32;
+pub const SCREEN_WIDTH: u16 = 64;
+pub const SCREEN_HEIGHT: u16 = 32;
 
 pub struct Chip8 {
     v: [u8; 16], // registers
@@ -35,7 +35,7 @@ pub struct Chip8 {
     // 0x390-0xFFF - 'variables and display refresh'
     memory: [u8; 4096],
 
-    pub gfx: Vec<u8>,
+    pub gfx: [u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
 
     delay_timer: u8,
 
@@ -64,9 +64,7 @@ impl Default for Chip8 {
             memory: [0u8; 4096],
             stack: [0u16; 16],
             sp: 0,
-
-            gfx: Vec::new(),
-
+            gfx: [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
             key: [0u8; 16],
 
             draw: true,
@@ -80,9 +78,7 @@ impl Chip8 {
         self.i = 0;
         self.sp = 0;
 
-        self.gfx = Vec::with_capacity(usize::from(SCREEN_WIDTH) * usize::from(SCREEN_HEIGHT));
-        self.gfx.resize(self.gfx.capacity(), 0);
-
+        self.gfx = [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
         self.stack = [0u16; 16];
 
         self.v = [0u8; 16];
@@ -112,8 +108,7 @@ impl Chip8 {
         match opcode {
             0x00E0 => {
                 // 00E0 - clear the screen
-                self.gfx = Vec::with_capacity(usize::from(SCREEN_WIDTH) * usize::from(SCREEN_HEIGHT));
-                self.gfx.resize(self.gfx.capacity(), 0);
+                self.gfx = [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
                 self.draw = true;
 
                 self.pc += 2;
@@ -183,99 +178,9 @@ impl Chip8 {
                 self.v[reg as usize] = result_carry.0;
                 self.pc += 2;
             }
-            o if o & 0xF00F == 0x8000 => {
-                // 8XY0 - Assign the value of register VX to the value of register VY
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
+            o if o & 0xF000 == 0x8000 => {
+                self.register_math(o, legacy_mode);
 
-                self.v[reg_x as usize] = self.v[reg_y as usize];
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x8001 => {
-                // 8XY1 - Bitwise OR the values of registers VX and register VY, result to VX
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-
-                self.v[reg_x as usize] |= self.v[reg_y as usize];
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x8002 => {
-                // 8XY2 - Bitwise AND the values of registers VX and register VY, result to VX
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-
-                self.v[reg_x as usize] &= self.v[reg_y as usize];
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x8003 => {
-                // 8XY3 - Bitwise XOR the values of registers VX and register VY, result to VX
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-
-                self.v[reg_x as usize] ^= self.v[reg_y as usize];
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x8004 => {
-                // 8XY4 - Add the values of registers VX and register VY, result to VX
-                // VF = 1 if overflow
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-
-                let result_carry = self.v[reg_x as usize].overflowing_add(self.v[reg_y as usize]);
-                self.v[reg_x as usize] = result_carry.0;
-                self.v[15] = if result_carry.1 { 1 } else { 0 };
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x8005 => {
-                // 8XY5 - Subtract value of register VY from value of register VX, result to VX
-                // VF = 1 if no borrow, 0 if there is
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-
-                let result_borrow = self.v[reg_x as usize].overflowing_sub(self.v[reg_y as usize]);
-                self.v[reg_x as usize] = result_borrow.0;
-                self.v[15] = if result_borrow.1 { 0 } else { 1 };
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x8006 => {
-                // 8XY6 - Store the value of register VY shifted right one bit in register VX
-                // Set register VF to the least significant bit prior to the shift
-                // NB: modern interpreters seem to operate on reg_x only
-                let reg_x = (o & 0x0F00) >> 8;
-                let val = if legacy_mode {
-                    let reg_y = (o & 0x00F0) >> 4;
-                    self.v[reg_y as usize]
-                } else {
-                    self.v[reg_x as usize]
-                };
-
-                self.v[reg_x as usize] = val.checked_shr(1).unwrap_or(0);
-                self.v[15] = val & 0x1;
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x8007 => {
-                // 8XY7 - Subtract value of register VX from value of register VY, result to VX
-                // VF = 1 if no borrow, 0 if there is
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-
-                let result_borrow = self.v[reg_y as usize].overflowing_sub(self.v[reg_x as usize]);
-                self.v[reg_x as usize] = result_borrow.0;
-                self.v[15] = if result_borrow.1 { 0 } else { 1 };
-                self.pc += 2;
-            }
-            o if o & 0xF00F == 0x800E => {
-                let reg_x = (o & 0x0F00) >> 8;
-
-                let val = if legacy_mode {
-                    let reg_y = (o & 0x00F0) >> 4;
-                    self.v[reg_y as usize]
-                } else {
-                    self.v[reg_x as usize]
-                };
-
-                self.v[reg_x as usize] = val.checked_shl(1).unwrap_or(u8::max_value());
-                self.v[15] = val & 0x80;
                 self.pc += 2;
             }
             o if o & 0xF00F == 0x9000 => {
@@ -309,29 +214,7 @@ impl Chip8 {
             o if o & 0xF000 == 0xD000 => {
                 // DXYN - Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
                 // Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
-                let reg_x = (o & 0x0F00) >> 8;
-                let reg_y = (o & 0x00F0) >> 4;
-                let height = o & 0x000F;
-                let mut pixel: u8;
-                self.v[15] = 0;
-
-                for yline in 0..height {
-                    pixel = self.memory[(self.i + yline) as usize];
-                    for xline in 0..8 {
-                        let offset = (u16::from(self.v[reg_x as usize])
-                            + xline
-                            + (u16::from(self.v[reg_y as usize]) + yline) * u16::from(SCREEN_WIDTH))
-                            as usize;
-                        if (pixel & (0x80 >> xline)) != 0 {
-                            if self.gfx[offset] == 1 {
-                                self.v[15] = 1;
-                            }
-                            self.gfx[offset] ^= 1;
-                        }
-                    }
-                }
-
-                self.draw = true;
+                self.draw_sprite((o & 0x0F00) >> 8, (o & 0x00F0) >> 4, o & 0x000F);
 
                 self.pc += 2;
             }
@@ -357,13 +240,6 @@ impl Chip8 {
                     self.pc += 2;
                 };
             }
-            o if o & 0xF0FF == 0xF007 => {
-                // FX07 - Store the current value of the delay timer in register VX
-                let reg = (o & 0x0F00) >> 8;
-
-                self.v[reg as usize] = self.delay_timer;
-                self.pc += 2;
-            }
             o if o & 0xF0FF == 0xF00A => {
                 // FX0A - Wait for a keypress and store the result in register VX
                 let reg = (o & 0x0F00) >> 8;
@@ -374,19 +250,159 @@ impl Chip8 {
                     self.pc += 2;
                 }
             }
+            o if o & 0xF000 == 0xF000 => {
+                self.special_functions(o);
+
+                self.pc += 2;
+            }
+            o => panic!("unknown opcode {:x?}", o),
+        };
+    }
+
+    pub fn update_timers(&mut self) {
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+        }
+    }
+
+    fn draw_sprite(&mut self, reg_x: u16, reg_y: u16, height: u16) {
+        let mut pixel: u8;
+        self.v[15] = 0;
+
+        for yline in 0..height {
+            pixel = self.memory[(self.i + yline) as usize];
+            for xline in 0..8 {
+                let offset = (u16::from(self.v[reg_x as usize])
+                    + xline
+                    + ((u16::from(self.v[reg_y as usize]) + yline) * SCREEN_WIDTH))
+                    as usize;
+                if (pixel & (0x80 >> xline)) != 0 {
+                    if self.gfx[offset] == 1 {
+                        self.v[15] = 1;
+                    }
+                    self.gfx[offset] ^= 1;
+                }
+            }
+        }
+
+        self.draw = true;
+    }
+
+    fn register_math(&mut self, opcode: u16, legacy_mode: bool) {
+        match opcode {
+            o if o & 0xF00F == 0x8000 => {
+                // 8XY0 - Assign the value of register VX to the value of register VY
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] = self.v[reg_y as usize];
+            }
+            o if o & 0xF00F == 0x8001 => {
+                // 8XY1 - Bitwise OR the values of registers VX and register VY, result to VX
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] |= self.v[reg_y as usize];
+            }
+            o if o & 0xF00F == 0x8002 => {
+                // 8XY2 - Bitwise AND the values of registers VX and register VY, result to VX
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] &= self.v[reg_y as usize];
+            }
+            o if o & 0xF00F == 0x8003 => {
+                // 8XY3 - Bitwise XOR the values of registers VX and register VY, result to VX
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                self.v[reg_x as usize] ^= self.v[reg_y as usize];
+            }
+            o if o & 0xF00F == 0x8004 => {
+                // 8XY4 - Add the values of registers VX and register VY, result to VX
+                // VF = 1 if overflow
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                let result_carry = self.v[reg_x as usize].overflowing_add(self.v[reg_y as usize]);
+                self.v[reg_x as usize] = result_carry.0;
+                self.v[15] = if result_carry.1 { 1 } else { 0 };
+            }
+            o if o & 0xF00F == 0x8005 => {
+                // 8XY5 - Subtract value of register VY from value of register VX, result to VX
+                // VF = 1 if no borrow, 0 if there is
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                let result_borrow = self.v[reg_x as usize].overflowing_sub(self.v[reg_y as usize]);
+                self.v[reg_x as usize] = result_borrow.0;
+                self.v[15] = if result_borrow.1 { 0 } else { 1 };
+            }
+            o if o & 0xF00F == 0x8006 => {
+                // 8XY6 - Store the value of register VY shifted right one bit in register VX
+                // Set register VF to the least significant bit prior to the shift
+                // NB: modern interpreters seem to operate on reg_x only
+                let reg_x = (o & 0x0F00) >> 8;
+                let val = if legacy_mode {
+                    let reg_y = (o & 0x00F0) >> 4;
+                    self.v[reg_y as usize]
+                } else {
+                    self.v[reg_x as usize]
+                };
+
+                self.v[reg_x as usize] = val.checked_shr(1).unwrap_or(0);
+                self.v[15] = val & 0x1;
+            }
+            o if o & 0xF00F == 0x8007 => {
+                // 8XY7 - Subtract value of register VX from value of register VY, result to VX
+                // VF = 1 if no borrow, 0 if there is
+                let reg_x = (o & 0x0F00) >> 8;
+                let reg_y = (o & 0x00F0) >> 4;
+
+                let result_borrow = self.v[reg_y as usize].overflowing_sub(self.v[reg_x as usize]);
+                self.v[reg_x as usize] = result_borrow.0;
+                self.v[15] = if result_borrow.1 { 0 } else { 1 };
+            }
+            o if o & 0xF00F == 0x800E => {
+                let reg_x = (o & 0x0F00) >> 8;
+
+                let val = if legacy_mode {
+                    let reg_y = (o & 0x00F0) >> 4;
+                    self.v[reg_y as usize]
+                } else {
+                    self.v[reg_x as usize]
+                };
+
+                self.v[reg_x as usize] = val.checked_shl(1).unwrap_or(u8::max_value());
+                self.v[15] = val & 0x80;
+            }
+            o => panic!("unknown opcode {:x?}", o)
+        };
+    }
+
+    fn special_functions(&mut self, opcode: u16) {
+        match opcode {
+            o if o & 0xF0FF == 0xF007 => {
+                // FX07 - Store the current value of the delay timer in register VX
+                let reg = (o & 0x0F00) >> 8;
+
+                self.v[reg as usize] = self.delay_timer;
+            }
             o if o & 0xF0FF == 0xF015 => {
                 // FX15 - Set the delay timer to the value of register VX
                 let reg = (o & 0x0F00) >> 8;
 
                 self.delay_timer = self.v[reg as usize];
-                self.pc += 2;
             }
             o if o & 0xF0FF == 0xF018 => {
                 // FX18 - Set the sound timer to the value of register VX
                 let reg = (o & 0x0F00) >> 8;
 
                 self.sound_timer = self.v[reg as usize];
-                self.pc += 2;
             }
             o if o & 0xF0FF == 0xF01E => {
                 // FX1E - Add the value stored in register VX to register I
@@ -399,8 +415,6 @@ impl Chip8 {
                     self.i -= 0x1000;
                     self.v[15] = 1;
                 }
-
-                self.pc += 2;
             }
             o if o & 0xF0FF == 0xF029 => {
                 // FX29 - Set I to the memory address of the sprite data corresponding to the
@@ -409,8 +423,6 @@ impl Chip8 {
 
                 // TODO: error if register value > 0x0F
                 self.i = u16::from(5 * self.v[reg as usize]);
-
-                self.pc += 2;
             }
             o if o & 0xF0FF == 0xF033 => {
                 // FX33 - Store the binary-coded decimal equivalent of the value stored in
@@ -425,7 +437,6 @@ impl Chip8 {
                 self.memory[(self.i + 1) as usize] = tens;
                 self.memory[(self.i + 2) as usize] = ones;
 
-                self.pc += 2;
             }
             o if o & 0xF0FF == 0xF055 => {
                 // FX55 - Store the values of registers V0 to VX inclusive in memory starting at address I
@@ -434,8 +445,6 @@ impl Chip8 {
                 self.memory[(self.i as usize)..=(self.i + reg_num) as usize]
                     .copy_from_slice(&self.v[0..=(reg_num as usize)]);
                 self.i += reg_num + 1;
-
-                self.pc += 2;
             }
             o if o & 0xF0FF == 0xF065 => {
                 // FX65 - Fill registers V0 to VX inclusive with the values stored in memory starting at address I
@@ -444,18 +453,8 @@ impl Chip8 {
                 self.v[0..=(reg_num as usize)]
                     .copy_from_slice(&self.memory[(self.i as usize)..=(self.i + reg_num) as usize]);
                 self.i += reg_num + 1;
-
-                self.pc += 2;
             }
-            o => panic!("unknown opcode {:x?}", o),
-        };
-
-        if self.delay_timer > 0 {
-            self.delay_timer -= 1;
-        }
-
-        if self.sound_timer > 0 {
-            self.sound_timer -= 1;
+            o => panic!("unknown opcode {:x?}", o)
         }
     }
 
