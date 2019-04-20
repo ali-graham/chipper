@@ -271,16 +271,17 @@ impl Chip8 {
 
     fn draw_sprite(&mut self, reg_x: u16, reg_y: u16, height: u16) {
         let mut pixel: u8;
+        let mut offset: usize;
         self.v[15] = 0;
 
         for yline in 0..height {
             pixel = self.memory[(self.i + yline) as usize];
             for xline in 0..8 {
-                let offset = (u16::from(self.v[reg_x as usize])
-                    + xline
-                    + ((u16::from(self.v[reg_y as usize]) + yline) * SCREEN_WIDTH))
-                    as usize;
                 if (pixel & (0x80 >> xline)) != 0 {
+                    offset = (u16::from(self.v[reg_x as usize])
+                                + xline
+                                + ((u16::from(self.v[reg_y as usize]) + yline) * SCREEN_WIDTH))
+                                as usize;
                     if self.gfx[offset] == 1 {
                         self.v[15] = 1;
                     }
