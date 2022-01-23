@@ -31,7 +31,7 @@ pub struct Audio {
 impl Audio {
     pub fn new(context: &sdl2::Sdl) -> Audio {
         let desired_spec = AudioSpecDesired {
-            freq: Some(44100),
+            freq: Some(44_100),
             channels: Some(1), // mono
             samples: None,     // default sample size
         };

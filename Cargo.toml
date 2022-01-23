@@ -2,9 +2,9 @@
 name = "chipper"
 version = "0.1.0"
 authors = ["Ali Graham <ali.graham@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-clap = "~2.33"
-rand = "0.8.0"
-sdl2 = "~0.34"
+clap = "~3.0"
+rand = "0.8"
+sdl2 = "~0.35"

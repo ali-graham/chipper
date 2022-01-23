@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
+#![deny(clippy::pedantic)]
 
 #[macro_use]
 extern crate clap;
@@ -26,15 +27,13 @@ fn main() {
         .version("0.1.0")
         .author("Ali Graham <ali.graham@gmail.com>")
         .about("Simple CHIP-8 emulator")
-        .args_from_usage(
-            "-f, --file=[file]   'ROM filename to load'
-             -s, --scale=[scale] 'Scale factor for the window'
-             -l, --legacy        'Use older shift opcodes'",
-        )
+        .arg(arg!(-f --file <file> "ROM filename to load"))
+        .arg(arg!(-s --scale [scale] "Scale factor for the window"))
+        .arg(arg!(-l --legacy "Use older shift opcodes"))
         .get_matches();
 
     let rom_filename = matches.value_of("file").expect("No ROM filename provided");
-    let scale = value_t!(matches, "scale", u8).unwrap_or(DEFAULT_DISPLAY_SCALE);
+    let scale = matches.value_of_t("scale").unwrap_or(DEFAULT_DISPLAY_SCALE);
     let legacy_mode = matches.is_present("legacy");
 
     let sdl_context = sdl2::init().unwrap();
@@ -58,7 +57,7 @@ fn main() {
 
     let mut events = sdl_context.event_pump().unwrap();
 
-    let mut chip8: chip8::Chip8 = Default::default();
+    let mut chip8: chip8::Chip8 = chip8::Chip8::default();
 
     let mut f = File::open(rom_filename).unwrap();
     let mut rom_data = Vec::new();

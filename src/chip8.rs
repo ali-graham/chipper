@@ -53,7 +53,7 @@ pub struct Chip8 {
 impl Default for Chip8 {
     fn default() -> Chip8 {
         Chip8 {
-            v: [0u8; 16],
+            v: [0_u8; 16],
 
             i: 0,
 
@@ -61,11 +61,11 @@ impl Default for Chip8 {
 
             delay_timer: 0,
             sound_timer: 0,
-            memory: [0u8; 4096],
-            stack: [0u16; 16],
+            memory: [0_u8; 4096],
+            stack: [0_u16; 16],
             sp: 0,
-            gfx: [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
-            key: [0u8; 16],
+            gfx: [0_u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
+            key: [0_u8; 16],
 
             draw: true,
         }
@@ -78,17 +78,17 @@ impl Chip8 {
         self.i = 0;
         self.sp = 0;
 
-        self.gfx = [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
-        self.stack = [0u16; 16];
+        self.gfx = [0_u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
+        self.stack = [0_u16; 16];
 
-        self.v = [0u8; 16];
+        self.v = [0_u8; 16];
 
         // load fontset
         self.memory[0..80].copy_from_slice(&CHIP8_FONTSET[0..80]);
         // rest of memory is zeroed
-        self.memory[80..4096].copy_from_slice(&[0u8; 4016]);
+        self.memory[80..4096].copy_from_slice(&[0_u8; 4016]);
 
-        self.key = [0u8; 16];
+        self.key = [0_u8; 16];
 
         self.delay_timer = 0;
         self.sound_timer = 0;
@@ -98,7 +98,7 @@ impl Chip8 {
 
     // FIXME: error if the rom_data is too large for the memory space ( 0x200-0xE8F )
     pub fn load_rom(&mut self, rom_data: &[u8]) {
-        self.memory[0x200..(0x200 + rom_data.len())].copy_from_slice(&rom_data);
+        self.memory[0x200..(0x200 + rom_data.len())].copy_from_slice(rom_data);
     }
 
     pub fn emulate_cycle(&mut self, legacy_mode: bool) {
@@ -108,7 +108,7 @@ impl Chip8 {
         match opcode {
             0x00E0 => {
                 // 00E0 - clear the screen
-                self.gfx = [0u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
+                self.gfx = [0_u8; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize];
                 self.draw = true;
 
                 self.pc += 2;
@@ -146,10 +146,10 @@ impl Chip8 {
                 let reg = (o & 0x0F00) >> 8;
                 let val = (o & 0x00FF) as u8;
 
-                if self.v[reg as usize] != val {
-                    self.pc += 4;
-                } else {
+                if self.v[reg as usize] == val {
                     self.pc += 2;
+                } else {
+                    self.pc += 4;
                 };
             }
             o if o & 0xF00F == 0x5000 => {
