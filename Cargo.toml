@@ -1,10 +1,12 @@
 [package]
 name = "chipper"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Ali Graham <ali.graham@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-clap = "~3.0"
+anyhow = "1.0"
+clap = { version = "~3", features = ["derive"]}
+lazy_static = "1.4.0"
 rand = "0.8"
 sdl2 = "~0.35"

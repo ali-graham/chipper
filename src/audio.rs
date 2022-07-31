@@ -40,8 +40,9 @@ impl Audio {
             device: context
                 .audio()
                 .unwrap()
-                .open_playback(None, &desired_spec, |spec| {
+                .open_playback(None, &desired_spec, |spec| -> SquareWave {
                     // initialize the audio callback
+                    #[allow(clippy::cast_precision_loss)]
                     SquareWave {
                         phase_inc: 440.0 / spec.freq as f32,
                         phase: 0.0,

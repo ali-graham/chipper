@@ -1,348 +1,100 @@
 #![forbid(unsafe_code)]
-#![deny(clippy::all)]
 #![deny(clippy::pedantic)]
 
-#[macro_use]
-extern crate clap;
-
-extern crate sdl2;
-
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels;
-use sdl2::rect::Rect;
-use std::time::{Duration, Instant};
-use std::{process, thread};
+use anyhow::Result;
+use clap::Parser;
 
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::Read;
+use std::thread;
+use std::time::{Duration, Instant};
+
+use crate::chip8::Chip8;
+use crate::hardware::Hardware;
 
 mod audio;
 mod chip8;
+mod hardware;
 
-const DEFAULT_DISPLAY_SCALE: u8 = 12;
+const TICK: Duration = Duration::from_millis(1000 / 60);
 
-fn main() {
-    let matches = clap::App::new("chipper")
-        .version("0.1.0")
-        .author("Ali Graham <ali.graham@gmail.com>")
-        .about("Simple CHIP-8 emulator")
-        .arg(arg!(-f --file <file> "ROM filename to load"))
-        .arg(arg!(-s --scale [scale] "Scale factor for the window"))
-        .arg(arg!(-l --legacy "Use older shift opcodes"))
-        .get_matches();
+/// Simple CHIP-8 emulator
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// ROM filename to load
+    #[clap(short, long, value_parser)]
+    file: String,
 
-    let rom_filename = matches.value_of("file").expect("No ROM filename provided");
-    let scale = matches.value_of_t("scale").unwrap_or(DEFAULT_DISPLAY_SCALE);
-    let legacy_mode = matches.is_present("legacy");
+    /// Scale factor for the window
+    #[clap(short, long, value_parser, default_value_t = hardware::DEFAULT_DISPLAY_SCALE)]
+    scale: u8,
 
-    let sdl_context = sdl2::init().unwrap();
+    /// Use older shift opcodes
+    #[clap(short, long, value_parser, default_value_t = false)]
+    legacy: bool,
+}
 
-    let video_subsys = sdl_context.video().unwrap();
-    let window = video_subsys
-        .window(
-            "chipper",
-            u32::from(chip8::SCREEN_WIDTH) * u32::from(scale),
-            u32::from(chip8::SCREEN_HEIGHT) * u32::from(scale),
-        )
-        .position_centered()
-        .build()
-        .unwrap();
+fn main() -> Result<()> {
+    let args = Args::parse();
 
-    let mut canvas = window.into_canvas().build().unwrap();
+    let rom_data = load_file(&args.file)?;
 
-    canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
-    canvas.clear();
-    canvas.present();
-
-    let mut events = sdl_context.event_pump().unwrap();
-
-    let mut chip8: chip8::Chip8 = chip8::Chip8::default();
-
-    let mut f = File::open(rom_filename).unwrap();
-    let mut rom_data = Vec::new();
-    f.read_to_end(&mut rom_data).unwrap();
-
-    chip8.initialize();
-    let mut audio = audio::Audio::new(&sdl_context);
+    let mut chip8: Chip8 = Chip8::new(args.legacy);
 
     chip8.load_rom(&rom_data);
 
-    let mut start: Option<Instant> = None;
-    let tick = Duration::from_millis(1000 / 60);
+    let mut hardware = Hardware::new(args.scale)?;
 
-    let mut main_loop = || {
-        start = Some(Instant::now());
-        let mut cycles = 0;
+    main_loop(&mut hardware, &mut chip8)?;
 
-        loop {
-            chip8.emulate_cycle(legacy_mode);
+    Ok(())
+}
+
+fn load_file(filename: &str) -> Result<Vec<u8>> {
+    let mut f = File::open(filename)?;
+    let mut rom_data = Vec::new();
+    f.read_to_end(&mut rom_data)?;
+    Ok(rom_data)
+}
+
+fn main_loop(hardware: &mut hardware::Hardware, chip8: &mut chip8::Chip8) -> Result<()> {
+    let mut start: Instant;
+    let mut cycles: i32;
+
+    'outer: loop {
+        start = Instant::now();
+        cycles = 0;
+
+        'inner: loop {
+            chip8.emulate_cycle();
             chip8.update_timers();
             cycles += 1;
 
-            match tick.checked_sub(start.unwrap().elapsed()) {
+            match TICK.checked_sub(start.elapsed()) {
                 Some(remaining) => {
                     if cycles > 4 {
                         thread::sleep(remaining);
-                        break;
+                        break 'inner;
                     }
                 }
-                None => break,
+                None => break 'inner,
             }
         }
 
         if chip8.graphics_needs_refresh() {
-            for yline in 0..chip8::SCREEN_HEIGHT {
-                for xline in 0..chip8::SCREEN_WIDTH {
-                    if chip8.gfx[((yline * chip8::SCREEN_WIDTH) + xline) as usize] == 1 {
-                        canvas.set_draw_color(pixels::Color::RGB(255, 255, 255));
-                    } else {
-                        canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
-                    }
-                    let r = Rect::new(
-                        i32::from(xline) * i32::from(scale),
-                        i32::from(yline) * i32::from(scale),
-                        u32::from(scale),
-                        u32::from(scale),
-                    );
-                    canvas.fill_rect(r).unwrap();
-                }
-            }
-            canvas.present();
+            hardware.refresh_graphics(&chip8.gfx)?;
             chip8.graphics_clear_refresh();
         }
 
-        if chip8.audio_sound() {
-            if audio.paused() {
-                audio.play();
-            }
-        } else if audio.playing() {
-            audio.pause();
-        }
+        hardware.do_sound(chip8.audio_sound());
 
-        for event in events.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    process::exit(1);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Num1),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x1);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Num2),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x2);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Num3),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x3);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Num4),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0xc);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Q),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x4);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::W),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x5);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::E),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x6);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::R),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0xd);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::A),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x7);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::S),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x8);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::D),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x9);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::F),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0xe);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Z),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0xa);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::X),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0x0);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::C),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0xb);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::V),
-                    repeat: false,
-                    ..
-                } => {
-                    chip8.key_down(0xf);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::Num1),
-                    ..
-                } => {
-                    chip8.key_up(0x1);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::Num2),
-                    ..
-                } => {
-                    chip8.key_up(0x2);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::Num3),
-                    ..
-                } => {
-                    chip8.key_up(0x3);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::Num4),
-                    ..
-                } => {
-                    chip8.key_up(0xc);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::Q),
-                    ..
-                } => {
-                    chip8.key_up(0x4);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::W),
-                    ..
-                } => {
-                    chip8.key_up(0x5);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::E),
-                    ..
-                } => {
-                    chip8.key_up(0x6);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::R),
-                    ..
-                } => {
-                    chip8.key_up(0xd);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::A),
-                    ..
-                } => {
-                    chip8.key_up(0x7);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::S),
-                    ..
-                } => {
-                    chip8.key_up(0x8);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::D),
-                    ..
-                } => {
-                    chip8.key_up(0x9);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::F),
-                    ..
-                } => {
-                    chip8.key_up(0xe);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::Z),
-                    ..
-                } => {
-                    chip8.key_up(0xa);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::X),
-                    ..
-                } => {
-                    chip8.key_up(0x0);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::C),
-                    ..
-                } => {
-                    chip8.key_up(0xb);
-                }
-                Event::KeyUp {
-                    keycode: Some(Keycode::V),
-                    ..
-                } => {
-                    chip8.key_up(0xf);
-                }
-                _ => {}
+        for event in hardware.event_iter() {
+            if chip8.handle_key(&event)? {
+                break 'outer;
             }
         }
-    };
-
-    loop {
-        main_loop();
     }
+
+    Ok(())
 }
