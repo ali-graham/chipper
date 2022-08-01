@@ -61,7 +61,10 @@ fn register_y(o: u16) -> usize {
 }
 
 fn register_xy(o: u16) -> (usize, usize) {
-    (usize::from((o & 0x0F00) >> 8), usize::from((o & 0x00F0) >> 4))
+    (
+        usize::from((o & 0x0F00) >> 8),
+        usize::from((o & 0x00F0) >> 4),
+    )
 }
 
 fn opcode_value(o: u16) -> u8 {

@@ -68,19 +68,19 @@ fn main_loop(hardware: &mut hardware::Hardware, chip8: &mut chip8::Chip8) -> Res
 
         'inner: loop {
             chip8.emulate_cycle();
-            chip8.update_timers();
             cycles += 1;
 
-            match TICK.checked_sub(start.elapsed()) {
-                Some(remaining) => {
-                    if cycles > 4 {
-                        thread::sleep(remaining);
-                        break 'inner;
-                    }
-                }
-                None => break 'inner,
+            let remaining = TICK.saturating_sub(start.elapsed());
+
+            if remaining.is_zero() {
+                break 'inner;
+            } else if cycles >= 8 {
+                thread::sleep(remaining);
+                break 'inner;
             }
         }
+
+        chip8.update_timers();
 
         if chip8.graphics_needs_refresh() {
             hardware.refresh_graphics(&chip8.gfx)?;
