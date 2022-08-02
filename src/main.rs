@@ -66,17 +66,18 @@ fn main_loop(hardware: &mut hardware::Hardware, chip8: &mut chip8::Chip8) -> Res
         start = Instant::now();
         cycles = 0;
 
-        'inner: loop {
+        'tick: loop {
             chip8.emulate_cycle();
             cycles += 1;
 
             let remaining = TICK.saturating_sub(start.elapsed());
 
             if remaining.is_zero() {
-                break 'inner;
+                break 'tick;
             } else if cycles >= 8 {
+                // TODO actually 8.3, work out how to get 83 cycles in 10 ticks
                 thread::sleep(remaining);
-                break 'inner;
+                break 'tick;
             }
         }
 
@@ -91,6 +92,7 @@ fn main_loop(hardware: &mut hardware::Hardware, chip8: &mut chip8::Chip8) -> Res
 
         for event in hardware.event_iter() {
             if chip8.handle_key(&event)? {
+                // needs a label or else it interrupts the 'for' loop
                 break 'outer;
             }
         }

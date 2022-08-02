@@ -30,6 +30,7 @@ const GRAPHICS_SIZE: usize = SCREEN_WIDTH as usize * SCREEN_HEIGHT as usize;
 
 lazy_static! {
     // maps SDL keycodes to Chip8 key input values
+    // Assumes a QWERTY layout :(
     static ref KEY_MAPPING: HashMap<Keycode, u8> = {
         let mut m = HashMap::new();
         m.insert(Keycode::Num1, 0x1);
@@ -126,7 +127,7 @@ impl Chip8 {
         }
     }
 
-    // FIXME: error if the rom_data is too large for the memory space ( 0x200-0xE8F )
+    // FIXME error if the rom_data is too large for the memory space ( 0x200-0xE8F )
     pub fn load_rom(&mut self, rom_data: &[u8]) {
         self.memory[0x200..(0x200 + rom_data.len())].copy_from_slice(rom_data);
     }
