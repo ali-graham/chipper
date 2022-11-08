@@ -2,101 +2,69 @@
 #![deny(clippy::pedantic)]
 
 use anyhow::Result;
+use clap::value_parser;
 use clap::Parser;
-
-use std::fs::File;
-use std::io::Read;
-use std::thread;
-use std::time::{Duration, Instant};
-
-use crate::chip8::Chip8;
-use crate::hardware::Hardware;
+use clap::ValueEnum;
 
 mod audio;
 mod chip8;
+mod emulator;
 mod hardware;
+mod profile;
+mod util;
 
-const TICK: Duration = Duration::from_millis(1000 / 60);
+#[derive(ValueEnum, Debug, Copy, Clone)]
+pub(crate) enum ProcessType {
+    // Step,
+    Run,
+}
+
+#[derive(ValueEnum, Debug, Eq, PartialEq, Hash, Copy, Clone)]
+pub(crate) enum Target {
+    Chip8,
+    SuperChip,
+    XoChip,
+}
+
+#[derive(ValueEnum, Debug, Eq, PartialEq, Hash, Copy, Clone)]
+pub(crate) enum KeyMapping {
+    Qwerty,
+    Colemak,
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub(crate) enum Action {
+    Quit,
+}
 
 /// Simple CHIP-8 emulator
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
+    /// Scale factor for the window
+    #[clap(short, long, value_parser = value_parser!(u8).range(1..64))]
+    scale: Option<u8>,
+
+    /// Keyboard layout to use
+    #[clap(short, long, value_enum, default_value_t = KeyMapping::Qwerty)]
+    key_mapping: KeyMapping,
+
+    /// Target architecture to emulate
+    #[clap(short, long, value_enum, default_value_t = Target::Chip8)]
+    target: Target,
+
+    /// How emulator cycles will be executed
+    #[clap(short, long, value_enum, default_value_t = ProcessType::Run)]
+    process_type: ProcessType,
+
     /// ROM filename to load
     #[clap(short, long, value_parser)]
     file: String,
-
-    /// Scale factor for the window
-    #[clap(short, long, value_parser, default_value_t = hardware::DEFAULT_DISPLAY_SCALE)]
-    scale: u8,
-
-    /// Use older shift opcodes
-    #[clap(short, long, value_parser, default_value_t = false)]
-    legacy: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let rom_data = load_file(&args.file)?;
-
-    let mut chip8: Chip8 = Chip8::new(args.legacy);
-
-    chip8.load_rom(&rom_data);
-
-    let mut hardware = Hardware::new(args.scale)?;
-
-    main_loop(&mut hardware, &mut chip8)?;
-
-    Ok(())
-}
-
-fn load_file(filename: &str) -> Result<Vec<u8>> {
-    let mut f = File::open(filename)?;
-    let mut rom_data = Vec::new();
-    f.read_to_end(&mut rom_data)?;
-    Ok(rom_data)
-}
-
-fn main_loop(hardware: &mut hardware::Hardware, chip8: &mut chip8::Chip8) -> Result<()> {
-    let mut start: Instant;
-    let mut cycles: i32;
-
-    'outer: loop {
-        start = Instant::now();
-        cycles = 0;
-
-        'tick: loop {
-            chip8.emulate_cycle();
-            cycles += 1;
-
-            let remaining = TICK.saturating_sub(start.elapsed());
-
-            if remaining.is_zero() {
-                break 'tick;
-            } else if cycles >= 8 {
-                // TODO actually 8.3, work out how to get 83 cycles in 10 ticks
-                thread::sleep(remaining);
-                break 'tick;
-            }
-        }
-
-        chip8.update_timers();
-
-        if chip8.graphics_needs_refresh() {
-            hardware.refresh_graphics(&chip8.gfx)?;
-            chip8.graphics_clear_refresh();
-        }
-
-        hardware.do_sound(chip8.audio_sound());
-
-        for event in hardware.event_iter() {
-            if chip8.handle_key(&event)? {
-                // needs a label or else it interrupts the 'for' loop
-                break 'outer;
-            }
-        }
-    }
-
-    Ok(())
+    emulator::Emulator::new(args.scale, args.key_mapping, args.target)
+        .and_then(|mut e| e.process(args.process_type, &args.file))
 }

@@ -1,10 +1,13 @@
-extern crate sdl2;
-
-use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioStatus};
+use anyhow::Error;
+use anyhow::Result;
+use sdl2::audio::AudioCallback;
+use sdl2::audio::AudioDevice;
+use sdl2::audio::AudioSpecDesired;
+use sdl2::audio::AudioStatus;
 
 struct SquareWave {
-    phase_inc: f32,
-    phase: f32,
+    phase_inc: f64,
+    phase: f64,
     volume: f32,
 }
 
@@ -24,48 +27,47 @@ impl AudioCallback for SquareWave {
     }
 }
 
-pub struct Audio {
+pub(super) struct Audio {
     device: AudioDevice<SquareWave>,
 }
 
 impl Audio {
-    pub fn new(context: &sdl2::Sdl) -> Audio {
+    pub(super) fn new(context: &sdl2::Sdl) -> Result<Self> {
         let desired_spec = AudioSpecDesired {
             freq: Some(44_100),
             channels: Some(1), // mono
             samples: None,     // default sample size
         };
 
-        Audio {
+        Ok(Audio {
             device: context
                 .audio()
-                .unwrap()
+                .map_err(Error::msg)?
                 .open_playback(None, &desired_spec, |spec| -> SquareWave {
                     // initialize the audio callback
-                    #[allow(clippy::cast_precision_loss)]
                     SquareWave {
-                        phase_inc: 440.0 / spec.freq as f32,
+                        phase_inc: 440.0 / f64::from(spec.freq),
                         phase: 0.0,
                         volume: 0.25,
                     }
                 })
-                .unwrap(),
-        }
+                .map_err(Error::msg)?,
+        })
     }
 
-    pub fn play(&mut self) {
+    pub(super) fn play(&mut self) {
         self.device.resume();
     }
 
-    pub fn pause(&mut self) {
+    pub(super) fn pause(&mut self) {
         self.device.pause();
     }
 
-    pub fn playing(&mut self) -> bool {
+    pub(super) fn playing(&mut self) -> bool {
         self.device.status() == AudioStatus::Playing
     }
 
-    pub fn paused(&mut self) -> bool {
+    pub(super) fn paused(&mut self) -> bool {
         self.device.status() == AudioStatus::Paused
     }
 }

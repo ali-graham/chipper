@@ -1,47 +1,67 @@
-use anyhow::{Error, Result};
+use anyhow::Error;
+use anyhow::Result;
 use sdl2::event::EventPollIterator;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
-use sdl2::{EventPump, VideoSubsystem};
+use sdl2::EventPump;
+use sdl2::VideoSubsystem;
 
-use crate::audio::Audio;
-use crate::chip8;
+use crate::audio;
+use crate::profile;
 
-pub const DEFAULT_DISPLAY_SCALE: u8 = 12;
+const WHITE: Color = Color::RGB(240, 240, 240);
+const BLACK: Color = Color::RGB(15, 15, 15);
 
-const WHITE: Color = Color::RGB(255, 255, 255);
-const BLACK: Color = Color::RGB(0, 0, 0);
-
-pub struct Hardware {
-    canvas: Canvas<Window>,
+pub(super) struct Hardware {
+    profile: profile::Profile,
     scale: u8,
-    audio: Audio,
-    pub events: EventPump,
+    canvas: Canvas<Window>,
+    audio: audio::Audio,
+    events: EventPump,
 }
 
 impl Hardware {
-    pub fn new(scale: u8) -> Result<Self> {
+    pub(super) fn new(scale: Option<u8>, profile: profile::Profile) -> Result<Self> {
         let sdl_context = sdl2::init().map_err(Error::msg)?;
 
         let video = sdl_context.video().map_err(Error::msg)?;
+        let scale = scale.unwrap_or_else(|| profile.default_screen_scale());
+        let canvas = Self::init_canvas(
+            &video,
+            u16::from(profile.screen_width()) * u16::from(scale),
+            u16::from(profile.screen_height()) * u16::from(scale),
+        )?;
+
+        let audio = audio::Audio::new(&sdl_context)?;
+
+        let events = sdl_context.event_pump().map_err(Error::msg)?;
 
         Ok(Self {
+            profile,
             scale,
-            canvas: Self::init_video(&video, scale)?,
-            audio: Audio::new(&sdl_context),
-            events: sdl_context.event_pump().map_err(Error::msg)?,
+            canvas,
+            audio,
+            events,
         })
     }
 
-    fn init_video(video_subsys: &VideoSubsystem, scale: u8) -> Result<Canvas<Window>> {
+    fn init_canvas(
+        video_subsys: &VideoSubsystem,
+        width: u16,
+        height: u16,
+    ) -> Result<Canvas<Window>> {
+        // TODO iterate through all displays, work out which one mouse is on,
+        // use that to determine window size limit
+        let dm = video_subsys.desktop_display_mode(0).map_err(Error::msg)?;
+
+        if i32::from(width) > dm.w || i32::from(height) > dm.h {
+            return Err(Error::msg("Window too large"));
+        }
+
         let window = video_subsys
-            .window(
-                "chipper",
-                u32::from(chip8::SCREEN_WIDTH) * u32::from(scale),
-                u32::from(chip8::SCREEN_HEIGHT) * u32::from(scale),
-            )
+            .window("chipper", u32::from(width), u32::from(height))
             .position_centered()
             .build()
             .map_err(Error::new)?;
@@ -58,23 +78,23 @@ impl Hardware {
         Ok(canvas)
     }
 
-    pub fn refresh_graphics(&mut self, gfx: &[u8]) -> Result<()> {
-        let mut color: Color;
-        let mut rect = Rect::new(0, 0, u32::from(self.scale), u32::from(self.scale));
-        let sw = u16::from(chip8::SCREEN_WIDTH);
-        let s = i32::from(self.scale);
+    pub(super) fn refresh_graphics(&mut self, gfx: &[bool], res_scale: u8) -> Result<()> {
+        let rect_scale = u32::from(self.scale * res_scale);
+        let mut rect = Rect::new(0, 0, rect_scale, rect_scale);
+        let sw = u16::from(self.profile.screen_width());
+        let s = i32::from(self.scale * res_scale);
 
-        for yline in 0..u16::from(chip8::SCREEN_HEIGHT) {
+        for yline in 0..u16::from(self.profile.screen_height()) {
             for xline in 0..sw {
-                color = if gfx[((yline * sw) + xline) as usize] == 1 {
-                    WHITE
-                } else {
-                    BLACK
-                };
-                self.canvas.set_draw_color(color);
+                self.canvas
+                    .set_draw_color(if gfx[usize::from((yline * sw) + xline)] {
+                        WHITE
+                    } else {
+                        BLACK
+                    });
                 rect.set_x(i32::from(xline) * s);
                 rect.set_y(i32::from(yline) * s);
-                self.canvas.fill_rect(rect).map_err(anyhow::Error::msg)?;
+                self.canvas.fill_rect(rect).map_err(Error::msg)?;
             }
         }
         self.canvas.present();
@@ -82,20 +102,19 @@ impl Hardware {
         Ok(())
     }
 
-    pub fn do_sound(&mut self, sound: bool) {
-        if sound {
-            if self.audio.paused() {
-                self.audio.play();
-            }
-            return;
-        }
-
+    pub(super) fn sound_stop(&mut self) {
         if self.audio.playing() {
             self.audio.pause();
         }
     }
 
-    pub fn event_iter(&mut self) -> EventPollIterator {
+    pub(super) fn sound_start(&mut self) {
+        if self.audio.paused() {
+            self.audio.play();
+        }
+    }
+
+    pub(super) fn event_iter(&mut self) -> EventPollIterator {
         self.events.poll_iter()
     }
 }

@@ -5,8 +5,8 @@ authors = ["Ali Graham <ali.graham@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0"
-clap = { version = "~3", features = ["derive"]}
-lazy_static = "1.4.0"
+anyhow = "1"
+clap = { version = "4", features = ["derive"]}
+once_cell = "1.16"
 rand = "0.8"
-sdl2 = "~0.35"
+sdl2 = "0.35"
