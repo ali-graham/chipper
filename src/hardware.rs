@@ -1,5 +1,6 @@
 use anyhow::Error;
 use anyhow::Result;
+use bitvec::prelude::BitVec;
 use sdl2::event::EventPollIterator;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
@@ -78,7 +79,7 @@ impl Hardware {
         Ok(canvas)
     }
 
-    pub(super) fn refresh_graphics(&mut self, gfx: &[bool], res_scale: u8) -> Result<()> {
+    pub(super) fn refresh_graphics(&mut self, gfx: &BitVec, res_scale: u8) -> Result<()> {
         let rect_scale = u32::from(self.scale * res_scale);
         let mut rect = Rect::new(0, 0, rect_scale, rect_scale);
         let sw = u16::from(self.profile.screen_width());

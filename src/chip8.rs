@@ -2,6 +2,9 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use anyhow::Result;
+use bitvec::prelude::BitArray;
+use bitvec::prelude::BitVec;
+use bitvec::BitArr;
 use once_cell::sync::Lazy;
 use rand::Rng;
 use rand::RngCore;
@@ -98,7 +101,7 @@ pub(super) struct Chip8 {
     // 0xF00-0xFFF - 'display refresh'
     memory: Box<[u8]>,
 
-    gfx: Box<[bool]>,
+    gfx: BitVec, // previously Box<[bool]>
     profile: profile::Profile,
 
     delay_timer: u8,
@@ -109,7 +112,7 @@ pub(super) struct Chip8 {
     stack: [u16; STACK_SIZE],
     sp: u8,
 
-    key: [bool; NUMBER_OF_KEYS],
+    key: BitArr!(for NUMBER_OF_KEYS, in u16), // previously [bool; NUMBER_OF_KEYS]
 
     draw: bool,
     hires: bool,
@@ -139,6 +142,13 @@ impl Chip8 {
         let mut memory = crate::util::boxed_array::<u8>(profile.memory_capacity());
         memory[..CHIP8_FONTSET.len()].copy_from_slice(&CHIP8_FONTSET[..]); // load fontset
 
+        let gfx = BitVec::repeat(
+            false,
+            usize::from(profile.screen_width()) * usize::from(profile.screen_height()),
+        );
+
+        let key = BitArray::<_>::ZERO;
+
         Ok(Self {
             target,
             rng,
@@ -156,11 +166,11 @@ impl Chip8 {
             sound_timer: 0,
             stack: [0_u16; 16],
             sp: 0,
-            gfx: crate::util::boxed_array::<bool>(
-                usize::from(profile.screen_width()) * usize::from(profile.screen_height()),
-            ),
+
+            gfx,
+
             profile,
-            key: [false; NUMBER_OF_KEYS],
+            key,
             key_wait: (None, None),
 
             draw: true,
@@ -173,7 +183,7 @@ impl Chip8 {
         self.memory[0x200..(0x200 + rom_data.len())].copy_from_slice(rom_data);
     }
 
-    pub(super) fn graphics(&self) -> &[bool] {
+    pub(super) fn graphics(&self) -> &BitVec {
         &self.gfx
     }
 
@@ -213,7 +223,9 @@ impl Chip8 {
             _ => {}
         }
 
-        self.key[usize::from(*key_num)] = pressed;
+        if let Some(k) = self.key.get_mut(usize::from(*key_num)) {
+            k.commit(pressed);
+        };
 
         Ok(())
     }
@@ -356,9 +368,10 @@ impl Chip8 {
 
     fn c8_display_clear(&mut self) -> u16 {
         // 00E0 - clear the screen
-        for i in 0..self.gfx.len() {
-            self.gfx[i] = false;
-        }
+        self.gfx = BitVec::repeat(
+            false,
+            usize::from(self.profile.screen_width()) * usize::from(self.profile.screen_height()),
+        );
         self.draw = true;
 
         2
@@ -600,20 +613,20 @@ impl Chip8 {
     //     todo!("16 x 16 sprite");
     // }
 
-    fn sprite_draw_8(&mut self, x: u8, y: u8, w: u8, h: u8, data_count: u16) -> bool {
+    fn sprite_draw_8(&mut self, x: u8, y: u8, width: u8, height: u8, data_count: u16) -> bool {
         let mut offset: usize;
         let mut x_off: usize;
         let mut y_off: usize;
         let mut unset: bool = false;
 
         // wrap starting draw positions if outside screen boundaries
-        let (x_pos, y_pos) = (usize::from(x % w), usize::from(y % h));
+        let (x_pos, y_pos) = (usize::from(x % width), usize::from(y % height));
 
         for yline in 0..usize::from(data_count) {
             y_off = y_pos + yline;
             if self.target == Target::XoChip {
-                y_off %= usize::from(h);
-            } else if y_off >= usize::from(h) {
+                y_off %= usize::from(height);
+            } else if y_off >= usize::from(height) {
                 // clip if going past bottom of screen
                 break;
             }
@@ -622,15 +635,18 @@ impl Chip8 {
             for xline in 0..8u8 {
                 x_off = x_pos + usize::from(xline);
                 if self.target == Target::XoChip {
-                    x_off %= usize::from(w);
-                } else if x_off >= usize::from(w) {
+                    x_off %= usize::from(width);
+                } else if x_off >= usize::from(width) {
                     // clip if going past bottom of screen
                     break;
                 }
                 if (mem_value & 0x80u8.rotate_right(xline.into())) != 0 {
                     offset = y_temp + x_off;
                     unset |= self.gfx[offset];
-                    self.gfx[offset] ^= true;
+                    if let Some(g) = self.gfx.get_mut(offset) {
+                        let b = *g;
+                        g.commit(b ^ true);
+                    };
                 }
             }
         }
@@ -793,9 +809,11 @@ impl Chip8 {
         if self.hires {
             if self.target == Target::XoChip {
                 // clear sceen on display mode change
-                for i in 0..self.gfx.len() {
-                    self.gfx[i] = false;
-                }
+                self.gfx = BitVec::repeat(
+                    false,
+                    usize::from(self.profile.screen_width())
+                        * usize::from(self.profile.screen_height()),
+                );
             }
 
             self.hires = false;
@@ -810,9 +828,11 @@ impl Chip8 {
         if !self.hires {
             if self.target == Target::XoChip {
                 // clear sceen on display mode change
-                for i in 0..self.gfx.len() {
-                    self.gfx[i] = false;
-                }
+                self.gfx = BitVec::repeat(
+                    false,
+                    usize::from(self.profile.screen_width())
+                        * usize::from(self.profile.screen_height()),
+                );
             }
 
             self.hires = true;
@@ -853,19 +873,26 @@ impl Chip8 {
     fn sc_scroll_down(&mut self, o: u16) -> u16 {
         // 00CN
 
-        let n = usize::from(o & 0xF);
-        let w = usize::from(self.profile.screen_width());
-        let h = usize::from(self.profile.screen_height());
+        let num_of_rows = usize::from(o & 0xF);
+        let width = usize::from(self.profile.screen_width());
+        let height = usize::from(self.profile.screen_height());
 
-        for y in (n..h).rev() {
-            for x in 0..w {
-                self.gfx[(y * w) + x] = self.gfx[((y - n) * w) + x];
+        for y in (num_of_rows..height).rev() {
+            for x in 0..width {
+                // fix -- replace with copy_within
+                let v = *self.gfx.get(((y - num_of_rows) * width) + x).unwrap();
+
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(v);
+                };
             }
         }
 
-        for y in 0..n {
-            for x in 0..w {
-                self.gfx[(y * w) + x] = false;
+        for y in 0..num_of_rows {
+            for x in 0..width {
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(false);
+                };
             }
         }
 
@@ -877,19 +904,26 @@ impl Chip8 {
     fn xo_scroll_up(&mut self, o: u16) -> u16 {
         // 00DN
 
-        let n = usize::from(o & 0xF);
-        let w = usize::from(self.profile.screen_width());
-        let h = usize::from(self.profile.screen_height());
+        let num_of_rows = usize::from(o & 0xF);
+        let width = usize::from(self.profile.screen_width());
+        let height = usize::from(self.profile.screen_height());
 
-        for y in n..h {
-            for x in 0..w {
-                self.gfx[(y * w) + x] = self.gfx[((y + n) * w) + x];
+        for y in num_of_rows..height {
+            for x in 0..width {
+                // fix -- replace with copy_within
+                let v = *self.gfx.get(((y + num_of_rows) * width) + x).unwrap();
+
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(v);
+                };
             }
         }
 
-        for y in (h - n)..h {
-            for x in 0..w {
-                self.gfx[(y * w) + x] = false;
+        for y in (height - num_of_rows)..height {
+            for x in 0..width {
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(false);
+                };
             }
         }
 
@@ -901,18 +935,25 @@ impl Chip8 {
     fn sc_scroll_right(&mut self) -> u16 {
         // 00FB
 
-        let w = usize::from(self.profile.screen_width());
-        let h = usize::from(self.profile.screen_height());
+        let width = usize::from(self.profile.screen_width());
+        let height = usize::from(self.profile.screen_height());
 
-        for x in (4..w).rev() {
-            for y in 0..h {
-                self.gfx[(y * w) + x] = self.gfx[(y * w) + (x - 4)];
+        for x in (4..width).rev() {
+            for y in 0..height {
+                // fix unwrap
+                let v = *self.gfx.get((y * width) + (x - 4)).unwrap();
+
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(v);
+                };
             }
         }
 
         for x in 0usize..3usize {
-            for y in 0..h {
-                self.gfx[(y * w) + x] = false;
+            for y in 0..height {
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(false);
+                };
             }
         }
 
@@ -924,18 +965,25 @@ impl Chip8 {
     fn sc_scroll_left(&mut self) -> u16 {
         // 00FC
 
-        let w = usize::from(self.profile.screen_width());
-        let h = usize::from(self.profile.screen_height());
+        let width = usize::from(self.profile.screen_width());
+        let height = usize::from(self.profile.screen_height());
 
-        for x in 0..(w - 4) {
-            for y in 0..h {
-                self.gfx[(y * w) + x] = self.gfx[(y * w) + (x + 4)];
+        for x in 0..(width - 4) {
+            for y in 0..height {
+                // fix unwrap
+                let v = *self.gfx.get((y * width) + (x + 4)).unwrap();
+
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(v);
+                };
             }
         }
 
-        for x in (w - 4)..w {
-            for y in 0..h {
-                self.gfx[(y * w) + x] = false;
+        for x in (width - 4)..width {
+            for y in 0..height {
+                if let Some(g) = self.gfx.get_mut((y * width) + x) {
+                    g.commit(false);
+                };
             }
         }
 
@@ -969,13 +1017,17 @@ mod tests {
     use std::panic;
 
     use anyhow::Result;
+    use bitvec::bits;
+    use bitvec::bitvec;
+    use bitvec::prelude::BitArray;
+    use bitvec::prelude::BitBox;
+    use bitvec::prelude::Lsb0;
     use rand::rngs::mock::StepRng;
     use sdl2::keyboard::Keycode;
     use sdl2::keyboard::Mod;
 
     use super::Chip8;
     use crate::profile;
-    use crate::util::boxed_array;
     use crate::{Action, KeyMapping, Target};
 
     #[test]
@@ -1184,7 +1236,9 @@ mod tests {
         }
 
         // verify
-        assert_eq!(chip8.key, [true; 16]);
+        let mut k = BitArray::<u16>::ZERO;
+        k.fill(true);
+        assert_eq!(chip8.key, k);
         assert!(results.into_iter().all(|r| r.unwrap().is_none()));
     }
 
@@ -1198,7 +1252,7 @@ mod tests {
             Box::new(rand::thread_rng()),
         )
         .expect("Could not initialise Chip8");
-        chip8.key = [true; 16];
+        chip8.key.fill(true);
         let mut results = Vec::<Result<Option<Action>>>::with_capacity(chip8.keymap.len());
 
         // then
@@ -1215,7 +1269,7 @@ mod tests {
         }
 
         // verify
-        assert_eq!(chip8.key, [false; 16]);
+        assert_eq!(chip8.key, BitArray::<u16>::ZERO);
         assert!(results.into_iter().all(|r| r.unwrap().is_none()));
     }
 
@@ -1229,8 +1283,8 @@ mod tests {
             Box::new(rand::thread_rng()),
         )
         .expect("Could not initialise Chip8");
-        //
-        chip8.gfx = Box::new([true; 64 * 32]);
+
+        chip8.gfx = bitvec![mut 1].repeat(64 * 32).into();
         chip8.draw = false;
         chip8.memory[0x200] = 0x0;
         chip8.memory[0x201] = 0xe0;
@@ -1239,7 +1293,10 @@ mod tests {
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.gfx, boxed_array::<bool>(64 * 32));
+        assert_eq!(
+            chip8.gfx,
+            Into::<BitBox>::into(bitvec![mut 0].repeat(64 * 32))
+        );
         assert!(chip8.draw);
         assert_eq!(chip8.pc, 0x202);
     }
@@ -1953,11 +2010,11 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x202);
-        assert_eq!(chip8.gfx[0..583], [false; 583]);
-        assert_eq!(chip8.gfx[583..591], [true; 8]);
-        assert_eq!(chip8.gfx[591..647], [false; 56]);
-        assert_eq!(chip8.gfx[647..655], [true; 8]);
-        assert_eq!(chip8.gfx[655..2048], [false; 1393]);
+        assert_eq!(chip8.gfx[0..583], bits!(0).repeat(583));
+        assert_eq!(chip8.gfx[583..591], bits!(1).repeat(8));
+        assert_eq!(chip8.gfx[591..647], bits!(0).repeat(56));
+        assert_eq!(chip8.gfx[647..655], bits!(1).repeat(8));
+        assert_eq!(chip8.gfx[655..2048], bits!(0).repeat(1393));
         assert_eq!(chip8.v[15], 0);
     }
 
@@ -1971,7 +2028,8 @@ mod tests {
             Box::new(rand::thread_rng()),
         )
         .expect("Could not initialise Chip8");
-        chip8.gfx = Box::new([true; 64 * 32]);
+
+        chip8.gfx = bits![1].repeat(64 * 32).into();
         chip8.memory[0x200] = 0xD2;
         chip8.memory[0x201] = 0x32;
         chip8.v[2] = 0x7;
@@ -1985,11 +2043,13 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x202);
-        assert_eq!(chip8.gfx[0..583], [true; 583]);
-        assert_eq!(chip8.gfx[583..591], [false; 8]);
-        assert_eq!(chip8.gfx[591..647], [true; 56]);
-        assert_eq!(chip8.gfx[647..655], [false; 8]);
-        assert_eq!(chip8.gfx[655..2048], [true; 1393]);
+
+        assert_eq!(chip8.gfx[0..583], bits!(1).repeat(583));
+        assert_eq!(chip8.gfx[583..591], bits!(0).repeat(8));
+        assert_eq!(chip8.gfx[591..647], bits!(1).repeat(56));
+        assert_eq!(chip8.gfx[647..655], bits!(0).repeat(8));
+        assert_eq!(chip8.gfx[655..2048], bits!(1).repeat(1393));
+
         assert_eq!(chip8.v[15], 1);
     }
 
@@ -2021,7 +2081,9 @@ mod tests {
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0x9E;
         chip8.v[1] = 0x8;
-        chip8.key[8] = true;
+        if let Some(k) = chip8.key.get_mut(8) {
+            k.commit(true);
+        };
 
         // then
         chip8.emulate_cycle();
@@ -2043,7 +2105,9 @@ mod tests {
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0x9E;
         chip8.v[1] = 0x7;
-        chip8.key[7] = false;
+        if let Some(k) = chip8.key.get_mut(7) {
+            k.commit(false);
+        };
 
         // then
         chip8.emulate_cycle();
@@ -2065,7 +2129,9 @@ mod tests {
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0xA1;
         chip8.v[1] = 0x8;
-        chip8.key[8] = true;
+        if let Some(k) = chip8.key.get_mut(8) {
+            k.commit(true);
+        };
 
         // then
         chip8.emulate_cycle();
@@ -2087,7 +2153,9 @@ mod tests {
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0xA1;
         chip8.v[1] = 0x7;
-        chip8.key[7] = false;
+        if let Some(k) = chip8.key.get_mut(7) {
+            k.commit(false);
+        };
 
         // then
         chip8.emulate_cycle();
