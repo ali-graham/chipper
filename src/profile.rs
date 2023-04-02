@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
 use crate::Target;
 
@@ -40,37 +40,40 @@ impl Profile {
     }
 }
 
-pub(crate) static PROFILES: Lazy<HashMap<Target, Profile>> = Lazy::new(|| {
-    HashMap::from([
-        (
-            Target::Chip8,
-            Profile {
-                screen_width: 64,
-                screen_height: 32,
-                default_screen_scale: 12,
-                memory_capacity: 4_096,
-                user_register_count: 0,
-            },
-        ),
-        (
-            Target::SuperChip,
-            Profile {
-                screen_width: 128,
-                screen_height: 64,
-                default_screen_scale: 6,
-                memory_capacity: 4_096,
-                user_register_count: 8,
-            },
-        ),
-        (
-            Target::XoChip,
-            Profile {
-                screen_width: 128,
-                screen_height: 64,
-                default_screen_scale: 6,
-                memory_capacity: 65_536,
-                user_register_count: 16,
-            },
-        ),
-    ])
-});
+pub(crate) fn profiles() -> &'static HashMap<Target, Profile> {
+    static CELL: OnceCell<HashMap<Target, Profile>> = OnceCell::new();
+    CELL.get_or_init(|| {
+        HashMap::from([
+            (
+                Target::Chip8,
+                Profile {
+                    screen_width: 64,
+                    screen_height: 32,
+                    default_screen_scale: 12,
+                    memory_capacity: 4_096,
+                    user_register_count: 0,
+                },
+            ),
+            (
+                Target::SuperChip,
+                Profile {
+                    screen_width: 128,
+                    screen_height: 64,
+                    default_screen_scale: 6,
+                    memory_capacity: 4_096,
+                    user_register_count: 8,
+                },
+            ),
+            (
+                Target::XoChip,
+                Profile {
+                    screen_width: 128,
+                    screen_height: 64,
+                    default_screen_scale: 6,
+                    memory_capacity: 65_536,
+                    user_register_count: 16,
+                },
+            ),
+        ])
+    })
+}

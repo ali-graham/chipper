@@ -27,7 +27,7 @@ pub(super) struct Emulator {
 
 impl Emulator {
     pub(super) fn new(scale: Option<u8>, key_mapping: KeyMapping, target: Target) -> Result<Self> {
-        let profile: profile::Profile = *profile::PROFILES
+        let profile: profile::Profile = *profile::profiles()
             .get(&target)
             .context("Unknown target architecture")?;
 

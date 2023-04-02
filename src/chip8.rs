@@ -5,7 +5,7 @@ use anyhow::Result;
 use bitvec::prelude::BitArray;
 use bitvec::prelude::BitVec;
 use bitvec::BitArr;
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 use rand::Rng;
 use rand::RngCore;
 use sdl2::event::Event;
@@ -38,53 +38,6 @@ const CHIP8_FONTSET: [u8; 80] = [
 const NUMBER_OF_KEYS: usize = 16;
 const NUMBER_OF_REGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
-
-static KEY_MAPPINGS: Lazy<HashMap<KeyMapping, HashMap<Keycode, u8>>> = Lazy::new(|| {
-    HashMap::from([
-        (
-            KeyMapping::Qwerty,
-            HashMap::from([
-                (Keycode::Num1, 0x1),
-                (Keycode::Num2, 0x2),
-                (Keycode::Num3, 0x3),
-                (Keycode::Num4, 0xc),
-                (Keycode::Q, 0x4),
-                (Keycode::W, 0x5),
-                (Keycode::E, 0x6),
-                (Keycode::R, 0xd),
-                (Keycode::A, 0x7),
-                (Keycode::S, 0x8),
-                (Keycode::D, 0x9),
-                (Keycode::F, 0xe),
-                (Keycode::Z, 0xa),
-                (Keycode::X, 0x0),
-                (Keycode::C, 0xb),
-                (Keycode::V, 0xf),
-            ]),
-        ),
-        (
-            KeyMapping::Colemak,
-            HashMap::from([
-                (Keycode::Num1, 0x1),
-                (Keycode::Num2, 0x2),
-                (Keycode::Num3, 0x3),
-                (Keycode::Num4, 0xc),
-                (Keycode::Q, 0x4),
-                (Keycode::W, 0x5),
-                (Keycode::F, 0x6),
-                (Keycode::P, 0xd),
-                (Keycode::A, 0x7),
-                (Keycode::R, 0x8),
-                (Keycode::S, 0x9),
-                (Keycode::T, 0xe),
-                (Keycode::Z, 0xa),
-                (Keycode::X, 0x0),
-                (Keycode::C, 0xb),
-                (Keycode::V, 0xf),
-            ]),
-        ),
-    ])
-});
 
 pub(super) struct Chip8 {
     v: [u8; NUMBER_OF_REGISTERS], // registers
@@ -132,7 +85,9 @@ impl Chip8 {
         key_mapping: KeyMapping,
         rng: Box<dyn RngCore>,
     ) -> Result<Self> {
-        let keymap = KEY_MAPPINGS.get(&key_mapping).context("Unknown keymap")?;
+        let keymap = Self::key_mappings()
+            .get(&key_mapping)
+            .context("Unknown keymap")?;
 
         let user_registers = match profile.user_register_count() {
             ur if ur > 0 => Some(crate::util::boxed_array::<u8>(usize::from(ur))),
@@ -210,6 +165,56 @@ impl Chip8 {
     pub(super) fn update_timers(&mut self) {
         self.delay_timer = self.delay_timer.saturating_sub(1);
         self.sound_timer = self.sound_timer.saturating_sub(1);
+    }
+
+    fn key_mappings() -> &'static HashMap<KeyMapping, HashMap<Keycode, u8>> {
+        static CELL: OnceCell<HashMap<KeyMapping, HashMap<Keycode, u8>>> = OnceCell::new();
+        CELL.get_or_init(|| {
+            HashMap::from([
+                (
+                    KeyMapping::Qwerty,
+                    HashMap::from([
+                        (Keycode::Num1, 0x1),
+                        (Keycode::Num2, 0x2),
+                        (Keycode::Num3, 0x3),
+                        (Keycode::Num4, 0xc),
+                        (Keycode::Q, 0x4),
+                        (Keycode::W, 0x5),
+                        (Keycode::E, 0x6),
+                        (Keycode::R, 0xd),
+                        (Keycode::A, 0x7),
+                        (Keycode::S, 0x8),
+                        (Keycode::D, 0x9),
+                        (Keycode::F, 0xe),
+                        (Keycode::Z, 0xa),
+                        (Keycode::X, 0x0),
+                        (Keycode::C, 0xb),
+                        (Keycode::V, 0xf),
+                    ]),
+                ),
+                (
+                    KeyMapping::Colemak,
+                    HashMap::from([
+                        (Keycode::Num1, 0x1),
+                        (Keycode::Num2, 0x2),
+                        (Keycode::Num3, 0x3),
+                        (Keycode::Num4, 0xc),
+                        (Keycode::Q, 0x4),
+                        (Keycode::W, 0x5),
+                        (Keycode::F, 0x6),
+                        (Keycode::P, 0xd),
+                        (Keycode::A, 0x7),
+                        (Keycode::R, 0x8),
+                        (Keycode::S, 0x9),
+                        (Keycode::T, 0xe),
+                        (Keycode::Z, 0xa),
+                        (Keycode::X, 0x0),
+                        (Keycode::C, 0xb),
+                        (Keycode::V, 0xf),
+                    ]),
+                ),
+            ])
+        })
     }
 
     fn set_key(&mut self, code: Keycode, pressed: bool) -> Result<()> {
@@ -1035,7 +1040,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1054,7 +1059,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1073,7 +1078,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1092,7 +1097,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1111,7 +1116,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1130,7 +1135,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1151,7 +1156,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1172,7 +1177,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1190,7 +1195,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1215,7 +1220,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1247,7 +1252,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1278,7 +1283,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1308,7 +1313,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1328,7 +1333,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1353,7 +1358,7 @@ mod tests {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
-                *profile::PROFILES.get(&Target::Chip8).unwrap(),
+                *profile::profiles().get(&Target::Chip8).unwrap(),
                 KeyMapping::Qwerty,
                 Box::new(rand::thread_rng()),
             )
@@ -1377,7 +1382,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1397,7 +1402,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1422,7 +1427,7 @@ mod tests {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
-                *profile::PROFILES.get(&Target::Chip8).unwrap(),
+                *profile::profiles().get(&Target::Chip8).unwrap(),
                 KeyMapping::Qwerty,
                 Box::new(rand::thread_rng()),
             )
@@ -1445,7 +1450,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1467,7 +1472,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1489,7 +1494,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1511,7 +1516,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1534,7 +1539,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1557,7 +1562,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1580,7 +1585,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1605,7 +1610,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1630,7 +1635,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1655,7 +1660,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1679,7 +1684,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1703,7 +1708,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1727,7 +1732,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1751,7 +1756,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1775,7 +1780,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1799,7 +1804,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1820,7 +1825,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1841,7 +1846,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1862,7 +1867,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1883,7 +1888,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1905,7 +1910,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1927,7 +1932,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1948,7 +1953,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -1970,7 +1975,7 @@ mod tests {
         let rng = StepRng::new(23, 2);
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rng),
         )
@@ -1992,7 +1997,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2023,7 +2028,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2073,7 +2078,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2097,7 +2102,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2121,7 +2126,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2145,7 +2150,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2169,7 +2174,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2192,7 +2197,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2215,7 +2220,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2238,7 +2243,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2263,7 +2268,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2288,7 +2293,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2315,7 +2320,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::SuperChip,
-            *profile::PROFILES.get(&Target::SuperChip).unwrap(),
+            *profile::profiles().get(&Target::SuperChip).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2342,7 +2347,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::PROFILES.get(&Target::Chip8).unwrap(),
+            *profile::profiles().get(&Target::Chip8).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2370,7 +2375,7 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::SuperChip,
-            *profile::PROFILES.get(&Target::SuperChip).unwrap(),
+            *profile::profiles().get(&Target::SuperChip).unwrap(),
             KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
         )
@@ -2399,7 +2404,7 @@ mod tests {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
-                *profile::PROFILES.get(&Target::Chip8).unwrap(),
+                *profile::profiles().get(&Target::Chip8).unwrap(),
                 KeyMapping::Qwerty,
                 Box::new(rand::thread_rng()),
             )
