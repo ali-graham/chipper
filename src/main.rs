@@ -26,12 +26,6 @@ pub(crate) enum Target {
     XoChip,
 }
 
-#[derive(ValueEnum, Debug, Eq, PartialEq, Hash, Copy, Clone)]
-pub(crate) enum KeyMapping {
-    Qwerty,
-    Colemak,
-}
-
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum Action {
     Quit,
@@ -44,10 +38,6 @@ struct Args {
     /// Scale factor for the window
     #[clap(short, long, value_parser = value_parser!(u8).range(1..64))]
     scale: Option<u8>,
-
-    /// Keyboard layout to use
-    #[clap(short, long, value_enum, default_value_t = KeyMapping::Qwerty)]
-    key_mapping: KeyMapping,
 
     /// Target architecture to emulate
     #[clap(short, long, value_enum, default_value_t = Target::Chip8)]
@@ -65,6 +55,6 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    emulator::Emulator::new(args.scale, args.key_mapping, args.target)
+    emulator::Emulator::new(args.scale, args.target)
         .and_then(|mut e| e.process(args.process_type, &args.file))
 }

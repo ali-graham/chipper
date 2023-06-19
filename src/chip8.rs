@@ -1,19 +1,18 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use anyhow::Context;
 use anyhow::Result;
 use bitvec::prelude::BitArray;
 use bitvec::prelude::BitVec;
 use bitvec::BitArr;
-use once_cell::sync::OnceCell;
 use rand::Rng;
 use rand::RngCore;
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use sdl2::keyboard::Scancode;
 
 use crate::profile;
 use crate::Action;
-use crate::KeyMapping;
 use crate::Target;
 
 const CHIP8_FONTSET: [u8; 80] = [
@@ -40,8 +39,8 @@ const NUMBER_OF_REGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
 
 pub(super) struct Chip8 {
-    v: [u8; NUMBER_OF_REGISTERS], // registers
-    uv: Option<Box<[u8]>>,
+    registers: [u8; NUMBER_OF_REGISTERS], // registers
+    user_registers: Option<Box<[u8]>>,
 
     i: u16, // can only be loaded with a 12-bit address value
 
@@ -74,21 +73,11 @@ pub(super) struct Chip8 {
 
     rng: Box<dyn RngCore>,
 
-    keymap: &'static HashMap<Keycode, u8>,
     key_wait: (Option<bool>, Option<u8>),
 }
 
 impl Chip8 {
-    pub(super) fn new(
-        target: Target,
-        profile: profile::Profile,
-        key_mapping: KeyMapping,
-        rng: Box<dyn RngCore>,
-    ) -> Result<Self> {
-        let keymap = Self::key_mappings()
-            .get(&key_mapping)
-            .context("Unknown keymap")?;
-
+    pub(super) fn new(target: Target, profile: profile::Profile, rng: Box<dyn RngCore>) -> Self {
         let user_registers = match profile.user_register_count() {
             ur if ur > 0 => Some(crate::util::boxed_array::<u8>(usize::from(ur))),
             _ => None,
@@ -104,14 +93,14 @@ impl Chip8 {
 
         let key = BitArray::<_>::ZERO;
 
-        Ok(Self {
+        Self {
             target,
             rng,
-            keymap,
+            // keymap,
             memory,
 
-            v: [0u8; 16],
-            uv: user_registers,
+            registers: [0u8; 16],
+            user_registers,
 
             i: 0,
 
@@ -130,7 +119,7 @@ impl Chip8 {
 
             draw: true,
             hires: false,
-        })
+        }
     }
 
     // FIXME error if the rom_data is too large for the memory space ( 0x200-0xE8F )
@@ -167,58 +156,34 @@ impl Chip8 {
         self.sound_timer = self.sound_timer.saturating_sub(1);
     }
 
-    fn key_mappings() -> &'static HashMap<KeyMapping, HashMap<Keycode, u8>> {
-        static CELL: OnceCell<HashMap<KeyMapping, HashMap<Keycode, u8>>> = OnceCell::new();
-        CELL.get_or_init(|| {
+    fn key_scan_mapping() -> &'static HashMap<Scancode, u8> {
+        static LOCK: OnceLock<HashMap<Scancode, u8>> = OnceLock::new();
+        LOCK.get_or_init(|| {
             HashMap::from([
-                (
-                    KeyMapping::Qwerty,
-                    HashMap::from([
-                        (Keycode::Num1, 0x1),
-                        (Keycode::Num2, 0x2),
-                        (Keycode::Num3, 0x3),
-                        (Keycode::Num4, 0xc),
-                        (Keycode::Q, 0x4),
-                        (Keycode::W, 0x5),
-                        (Keycode::E, 0x6),
-                        (Keycode::R, 0xd),
-                        (Keycode::A, 0x7),
-                        (Keycode::S, 0x8),
-                        (Keycode::D, 0x9),
-                        (Keycode::F, 0xe),
-                        (Keycode::Z, 0xa),
-                        (Keycode::X, 0x0),
-                        (Keycode::C, 0xb),
-                        (Keycode::V, 0xf),
-                    ]),
-                ),
-                (
-                    KeyMapping::Colemak,
-                    HashMap::from([
-                        (Keycode::Num1, 0x1),
-                        (Keycode::Num2, 0x2),
-                        (Keycode::Num3, 0x3),
-                        (Keycode::Num4, 0xc),
-                        (Keycode::Q, 0x4),
-                        (Keycode::W, 0x5),
-                        (Keycode::F, 0x6),
-                        (Keycode::P, 0xd),
-                        (Keycode::A, 0x7),
-                        (Keycode::R, 0x8),
-                        (Keycode::S, 0x9),
-                        (Keycode::T, 0xe),
-                        (Keycode::Z, 0xa),
-                        (Keycode::X, 0x0),
-                        (Keycode::C, 0xb),
-                        (Keycode::V, 0xf),
-                    ]),
-                ),
+                (Scancode::Num1, 0x1),
+                (Scancode::Num2, 0x2),
+                (Scancode::Num3, 0x3),
+                (Scancode::Num4, 0xc),
+                (Scancode::Q, 0x4),
+                (Scancode::W, 0x5),
+                (Scancode::E, 0x6),
+                (Scancode::R, 0xd),
+                (Scancode::A, 0x7),
+                (Scancode::S, 0x8),
+                (Scancode::D, 0x9),
+                (Scancode::F, 0xe),
+                (Scancode::Z, 0xa),
+                (Scancode::X, 0x0),
+                (Scancode::C, 0xb),
+                (Scancode::V, 0xf),
             ])
         })
     }
 
-    fn set_key(&mut self, code: Keycode, pressed: bool) -> Result<()> {
-        let key_num = self.keymap.get(&code).context("invalid key code")?;
+    fn set_key(&mut self, code: Scancode, pressed: bool) -> Result<()> {
+        let key_num = Self::key_scan_mapping()
+            .get(&code)
+            .context("invalid key code")?;
 
         match self.key_wait {
             (Some(false), Some(num)) if !pressed && num == *key_num => {
@@ -239,19 +204,19 @@ impl Chip8 {
         match event {
             Event::Quit { .. }
             | Event::KeyDown {
-                keycode: Some(Keycode::Escape),
+                scancode: Some(Scancode::Escape),
                 ..
             } => Ok(Some(Action::Quit)),
             Event::KeyDown {
                 repeat: false,
-                keycode: Some(code),
+                scancode: Some(code),
                 ..
             }
             | Event::KeyUp {
                 repeat: false,
-                keycode: Some(code),
+                scancode: Some(code),
                 ..
-            } if self.keymap.contains_key(code) => self
+            } if Self::key_scan_mapping().contains_key(code) => self
                 .set_key(*code, matches!(event, Event::KeyDown { .. }))
                 .and(Ok(None)),
             _ => Ok(None),
@@ -373,10 +338,7 @@ impl Chip8 {
 
     fn c8_display_clear(&mut self) -> u16 {
         // 00E0 - clear the screen
-        self.gfx = BitVec::repeat(
-            false,
-            usize::from(self.profile.screen_width()) * usize::from(self.profile.screen_height()),
-        );
+        self.gfx.fill(false);
         self.draw = true;
 
         2
@@ -387,7 +349,7 @@ impl Chip8 {
         let reg = Self::register_x(o);
         let val = Self::opcode_value(o);
 
-        if self.v[reg] == val {
+        if self.registers[reg] == val {
             4
         } else {
             2
@@ -399,7 +361,7 @@ impl Chip8 {
         let reg = Self::register_x(o);
         let val = Self::opcode_value(o);
 
-        if self.v[reg] == val {
+        if self.registers[reg] == val {
             2
         } else {
             4
@@ -410,7 +372,7 @@ impl Chip8 {
         // 5XY0 - Skip the following instruction if the value of register VX equals value of register VY
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        if self.v[reg_x] == self.v[reg_y] {
+        if self.registers[reg_x] == self.registers[reg_y] {
             4
         } else {
             2
@@ -421,7 +383,7 @@ impl Chip8 {
         // 6XNN - store NN in register X
         let reg = Self::register_x(o);
 
-        self.v[reg] = Self::opcode_value(o);
+        self.registers[reg] = Self::opcode_value(o);
         2
     }
 
@@ -429,8 +391,8 @@ impl Chip8 {
         // 7XNN - Add the value NN to register VX (carry flag is not changed)
         let reg = Self::register_x(o);
 
-        let result_carry = self.v[reg].overflowing_add(Self::opcode_value(o));
-        self.v[reg] = result_carry.0;
+        let result_carry = self.registers[reg].overflowing_add(Self::opcode_value(o));
+        self.registers[reg] = result_carry.0;
         2
     }
 
@@ -438,7 +400,7 @@ impl Chip8 {
         // 8XY0 - Assign the value of register VX to the value of register VY
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        self.v[reg_x] = self.v[reg_y];
+        self.registers[reg_x] = self.registers[reg_y];
         2
     }
 
@@ -446,9 +408,9 @@ impl Chip8 {
         // 8XY1 - Bitwise OR the values of registers VX and register VY, result to VX
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        self.v[reg_x] |= self.v[reg_y];
+        self.registers[reg_x] |= self.registers[reg_y];
         match self.target {
-            Target::Chip8 => self.v[15] = 0,
+            Target::Chip8 => self.registers[15] = 0,
             Target::SuperChip | Target::XoChip => {}
         }
 
@@ -459,9 +421,9 @@ impl Chip8 {
         // 8XY2 - Bitwise AND the values of registers VX and register VY, result to VX
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        self.v[reg_x] &= self.v[reg_y];
+        self.registers[reg_x] &= self.registers[reg_y];
         match self.target {
-            Target::Chip8 => self.v[15] = 0,
+            Target::Chip8 => self.registers[15] = 0,
             Target::SuperChip | Target::XoChip => {}
         }
 
@@ -472,9 +434,9 @@ impl Chip8 {
         // 8XY3 - Bitwise XOR the values of registers VX and register VY, result to VX
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        self.v[reg_x] ^= self.v[reg_y];
+        self.registers[reg_x] ^= self.registers[reg_y];
         match self.target {
-            Target::Chip8 => self.v[15] = 0,
+            Target::Chip8 => self.registers[15] = 0,
             Target::SuperChip | Target::XoChip => {}
         }
 
@@ -486,9 +448,9 @@ impl Chip8 {
         // VF = 1 if overflow
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        let result_carry = self.v[reg_x].overflowing_add(self.v[reg_y]);
-        self.v[reg_x] = result_carry.0;
-        self.v[15] = u8::from(result_carry.1);
+        let result_carry = self.registers[reg_x].overflowing_add(self.registers[reg_y]);
+        self.registers[reg_x] = result_carry.0;
+        self.registers[15] = u8::from(result_carry.1);
         2
     }
 
@@ -497,9 +459,9 @@ impl Chip8 {
         // VF = 1 if no borrow, 0 if there is
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        let result_borrow = self.v[reg_x].overflowing_sub(self.v[reg_y]);
-        self.v[reg_x] = result_borrow.0;
-        self.v[15] = u8::from(!result_borrow.1);
+        let result_borrow = self.registers[reg_x].overflowing_sub(self.registers[reg_y]);
+        self.registers[reg_x] = result_borrow.0;
+        self.registers[15] = u8::from(!result_borrow.1);
         2
     }
 
@@ -510,12 +472,12 @@ impl Chip8 {
         let reg_x = Self::register_x(o);
 
         let val = match self.target {
-            Target::Chip8 | Target::XoChip => self.v[Self::register_y(o)],
-            Target::SuperChip => self.v[reg_x],
+            Target::Chip8 | Target::XoChip => self.registers[Self::register_y(o)],
+            Target::SuperChip => self.registers[reg_x],
         };
 
-        self.v[reg_x] = val.checked_shr(1).unwrap_or(0);
-        self.v[15] = val & 0x1;
+        self.registers[reg_x] = val.checked_shr(1).unwrap_or(0);
+        self.registers[15] = val & 0x1;
         2
     }
 
@@ -524,9 +486,9 @@ impl Chip8 {
         // VF = 1 if no borrow, 0 if there is
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        let result_borrow = self.v[reg_y].overflowing_sub(self.v[reg_x]);
-        self.v[reg_x] = result_borrow.0;
-        self.v[15] = u8::from(!result_borrow.1);
+        let result_borrow = self.registers[reg_y].overflowing_sub(self.registers[reg_x]);
+        self.registers[reg_x] = result_borrow.0;
+        self.registers[15] = u8::from(!result_borrow.1);
         2
     }
 
@@ -535,12 +497,12 @@ impl Chip8 {
         let reg_x = Self::register_x(o);
 
         let val = match self.target {
-            Target::Chip8 | Target::XoChip => self.v[Self::register_y(o)],
-            Target::SuperChip => self.v[reg_x],
+            Target::Chip8 | Target::XoChip => self.registers[Self::register_y(o)],
+            Target::SuperChip => self.registers[reg_x],
         };
 
-        self.v[reg_x] = val.checked_shl(1).unwrap_or(u8::max_value());
-        self.v[15] = val.checked_shr(7).unwrap_or(0) & 0x1;
+        self.registers[reg_x] = val.checked_shl(1).unwrap_or(u8::max_value());
+        self.registers[15] = val.checked_shr(7).unwrap_or(0) & 0x1;
         2
     }
 
@@ -548,7 +510,7 @@ impl Chip8 {
         // 9XY0 - Skip the following instruction if the value of register VX does not equal value of register VY
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        if self.v[reg_x] == self.v[reg_y] {
+        if self.registers[reg_x] == self.registers[reg_y] {
             2
         } else {
             4
@@ -566,8 +528,8 @@ impl Chip8 {
         // BXNN - goto XNN + VX
         self.pc = (o & 0x0FFF)
             + match self.target {
-                Target::Chip8 | Target::XoChip => u16::from(self.v[0]),
-                Target::SuperChip => u16::from(self.v[Self::register_x(o)]),
+                Target::Chip8 | Target::XoChip => u16::from(self.registers[0]),
+                Target::SuperChip => u16::from(self.registers[Self::register_x(o)]),
             };
 
         true
@@ -578,7 +540,7 @@ impl Chip8 {
         let reg = Self::register_x(o);
         let val = Self::opcode_value(o);
 
-        self.v[reg] = val & self.rng.gen::<u8>();
+        self.registers[reg] = val & self.rng.gen::<u8>();
         2
     }
 
@@ -589,6 +551,7 @@ impl Chip8 {
         let (reg_x, reg_y) = Self::register_xy(o);
         let data_count = o & 0x000F;
 
+        // FIXME could cache in struct and change when switching hires mode
         let (w, h) =
             if (self.target == Target::SuperChip || self.target == Target::XoChip) && !self.hires {
                 (
@@ -603,22 +566,32 @@ impl Chip8 {
             && self.hires
             && data_count == 0
         {
-            // self.sprite_draw_16(self.v[reg_x], self.v[reg_y], w, h)
-            todo!()
+            self.draw_sprite(16, self.registers[reg_x], self.registers[reg_y], w, h, 16)
         } else {
-            self.sprite_draw_8(self.v[reg_x], self.v[reg_y], w, h, data_count)
+            self.draw_sprite(
+                8,
+                self.registers[reg_x],
+                self.registers[reg_y],
+                w,
+                h,
+                data_count,
+            )
         };
 
         self.draw = true;
-        self.v[15] = u8::from(unset);
+        self.registers[15] = u8::from(unset);
         2
     }
 
-    // fn sprite_draw_16(&mut self, _x: u8, _y: u8, _w: u8, _h: u8q) -> bool {
-    //     todo!("16 x 16 sprite");
-    // }
-
-    fn sprite_draw_8(&mut self, x: u8, y: u8, width: u8, height: u8, data_count: u16) -> bool {
+    fn draw_sprite(
+        &mut self,
+        size: u8,
+        x: u8,
+        y: u8,
+        width: u8,
+        height: u8,
+        data_count: u16,
+    ) -> bool {
         let mut offset: usize;
         let mut x_off: usize;
         let mut y_off: usize;
@@ -637,7 +610,7 @@ impl Chip8 {
             }
             let y_temp = y_off * usize::from(self.profile.screen_width());
             let mem_value = self.memory[usize::from(self.i) + yline];
-            for xline in 0..8u8 {
+            for xline in 0..size {
                 x_off = x_pos + usize::from(xline);
                 if self.target == Target::XoChip {
                     x_off %= usize::from(width);
@@ -664,7 +637,7 @@ impl Chip8 {
         // value currently stored in register VX is pressed
         let reg = Self::register_x(o);
 
-        if self.key[usize::from(self.v[reg])] {
+        if self.key[usize::from(self.registers[reg])] {
             4
         } else {
             2
@@ -676,7 +649,7 @@ impl Chip8 {
         // value currently stored in register VX is not pressed
         let reg = Self::register_x(o);
 
-        if self.key[usize::from(self.v[reg])] {
+        if self.key[usize::from(self.registers[reg])] {
             2
         } else {
             4
@@ -690,7 +663,7 @@ impl Chip8 {
         match self.key_wait {
             (Some(true), Some(key_num)) => {
                 self.key_wait = (None, None);
-                self.v[reg] = key_num;
+                self.registers[reg] = key_num;
                 2
             }
             (None, None) => {
@@ -705,7 +678,7 @@ impl Chip8 {
         // FX07 - Store the current value of the delay timer in register VX
         let reg_x = Self::register_x(o);
 
-        self.v[reg_x] = self.delay_timer;
+        self.registers[reg_x] = self.delay_timer;
         2
     }
 
@@ -713,7 +686,7 @@ impl Chip8 {
         // FX15 - Set the delay timer to the value of register VX
         let reg_x = Self::register_x(o);
 
-        self.delay_timer = self.v[reg_x];
+        self.delay_timer = self.registers[reg_x];
         2
     }
 
@@ -721,7 +694,7 @@ impl Chip8 {
         // FX18 - Set the sound timer to the value of register VX
         let reg_x = Self::register_x(o);
 
-        self.sound_timer = self.v[reg_x];
+        self.sound_timer = self.registers[reg_x];
         2
     }
 
@@ -730,11 +703,11 @@ impl Chip8 {
         // Sets carry flag if 12-bit limit exceeded for I
         let reg_x = Self::register_x(o);
 
-        self.i += u16::from(self.v[reg_x]);
+        self.i += u16::from(self.registers[reg_x]);
 
         if self.i > 0xFFF {
             self.i -= 0x1000;
-            self.v[15] = 1;
+            self.registers[15] = 1;
         }
 
         2
@@ -745,7 +718,7 @@ impl Chip8 {
         // hexadecimal digit stored in register VX
         let reg_x = Self::register_x(o);
 
-        self.i = u16::from(5 * (self.v[reg_x] & 0xF));
+        self.i = u16::from(5 * (self.registers[reg_x] & 0xF));
         2
     }
 
@@ -753,7 +726,7 @@ impl Chip8 {
         // FX30 - Set I to the memory address of the (10-bit) sprite data corresponding to the
         // hexadecimal digit stored in register VX (0-9)
         let reg_x = Self::register_x(o);
-        let value = self.v[reg_x];
+        let value = self.registers[reg_x];
 
         if value <= 9 {
             self.i = u16::from(10 * value);
@@ -767,7 +740,7 @@ impl Chip8 {
         // register VX at addresses I, I + 1, and I + 2
         let reg_x = Self::register_x(o);
 
-        let val = self.v[reg_x];
+        let val = self.registers[reg_x];
         let ones = val % 10;
         let tens = ((val % 100) - ones) / 10;
         let hundreds = (val - (tens + ones)) / 100;
@@ -784,7 +757,7 @@ impl Chip8 {
         // I is set to I + X + 1 after operation
         let reg_num = (o & 0x0F00) >> 8;
         self.memory[usize::from(self.i)..=(usize::from(self.i) + usize::from(reg_num))]
-            .copy_from_slice(&self.v[0..=usize::from(reg_num)]);
+            .copy_from_slice(&self.registers[0..=usize::from(reg_num)]);
 
         match self.target {
             Target::Chip8 | Target::XoChip => self.i += reg_num + 1,
@@ -798,7 +771,7 @@ impl Chip8 {
         // FX65 - Fill registers V0 to VX inclusive with the values stored in memory starting at address I
         // I is set to I + X + 1 after operation
         let reg_num = (o & 0x0F00) >> 8;
-        self.v[0..=usize::from(reg_num)]
+        self.registers[0..=usize::from(reg_num)]
             .copy_from_slice(&self.memory[usize::from(self.i)..=usize::from(self.i + reg_num)]);
 
         match self.target {
@@ -814,11 +787,7 @@ impl Chip8 {
         if self.hires {
             if self.target == Target::XoChip {
                 // clear sceen on display mode change
-                self.gfx = BitVec::repeat(
-                    false,
-                    usize::from(self.profile.screen_width())
-                        * usize::from(self.profile.screen_height()),
-                );
+                self.gfx.fill(false);
             }
 
             self.hires = false;
@@ -833,11 +802,7 @@ impl Chip8 {
         if !self.hires {
             if self.target == Target::XoChip {
                 // clear sceen on display mode change
-                self.gfx = BitVec::repeat(
-                    false,
-                    usize::from(self.profile.screen_width())
-                        * usize::from(self.profile.screen_height()),
-                );
+                self.gfx.fill(false);
             }
 
             self.hires = true;
@@ -851,9 +816,9 @@ impl Chip8 {
         // FX75 - Store V0..VX in RPL user flags (X <= 7 for SuperChip)
         let c = usize::from((o & 0x0F00) >> 8);
 
-        match self.uv.as_mut() {
+        match self.user_registers.as_mut() {
             Some(reg) if c < usize::from(self.profile.user_register_count()) => {
-                reg[0..=c].copy_from_slice(&self.v[0..=c]);
+                reg[0..=c].copy_from_slice(&self.registers[0..=c]);
             }
             Some(_) | None => {}
         }
@@ -865,9 +830,9 @@ impl Chip8 {
         // FX85 - Read V0..VX from RPL user flags (X <= 7 for SuperChip)
         let c = usize::from((o & 0x0F00) >> 8);
 
-        match self.uv.as_mut() {
+        match self.user_registers.as_mut() {
             Some(reg) if c < usize::from(self.profile.user_register_count()) => {
-                self.v[0..=c].copy_from_slice(&reg[0..=c]);
+                self.registers[0..=c].copy_from_slice(&reg[0..=c]);
             }
             Some(_) | None => {}
         }
@@ -882,24 +847,10 @@ impl Chip8 {
         let width = usize::from(self.profile.screen_width());
         let height = usize::from(self.profile.screen_height());
 
-        for y in (num_of_rows..height).rev() {
-            for x in 0..width {
-                // fix -- replace with copy_within
-                let v = *self.gfx.get(((y - num_of_rows) * width) + x).unwrap();
+        self.gfx
+            .copy_within(0..((height - num_of_rows) * width), num_of_rows * width);
 
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(v);
-                };
-            }
-        }
-
-        for y in 0..num_of_rows {
-            for x in 0..width {
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(false);
-                };
-            }
-        }
+        self.gfx[0..(num_of_rows * width)].fill(false);
 
         self.draw = true;
 
@@ -913,24 +864,10 @@ impl Chip8 {
         let width = usize::from(self.profile.screen_width());
         let height = usize::from(self.profile.screen_height());
 
-        for y in num_of_rows..height {
-            for x in 0..width {
-                // fix -- replace with copy_within
-                let v = *self.gfx.get(((y + num_of_rows) * width) + x).unwrap();
+        self.gfx
+            .copy_within((num_of_rows * width)..(height * width), 0);
 
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(v);
-                };
-            }
-        }
-
-        for y in (height - num_of_rows)..height {
-            for x in 0..width {
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(false);
-                };
-            }
-        }
+        self.gfx[((height - num_of_rows) * width)..(height * width)].fill(false);
 
         self.draw = true;
 
@@ -943,23 +880,12 @@ impl Chip8 {
         let width = usize::from(self.profile.screen_width());
         let height = usize::from(self.profile.screen_height());
 
-        for x in (4..width).rev() {
-            for y in 0..height {
-                // fix unwrap
-                let v = *self.gfx.get((y * width) + (x - 4)).unwrap();
+        self.gfx.copy_within(0..((width * height) - 4), 4);
 
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(v);
-                };
-            }
-        }
-
-        for x in 0usize..3usize {
-            for y in 0..height {
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(false);
-                };
-            }
+        let mut offset: usize;
+        for y in 0..height {
+            offset = y * width;
+            self.gfx[offset..(offset + 4)].fill(false);
         }
 
         self.draw = true;
@@ -973,23 +899,12 @@ impl Chip8 {
         let width = usize::from(self.profile.screen_width());
         let height = usize::from(self.profile.screen_height());
 
-        for x in 0..(width - 4) {
-            for y in 0..height {
-                // fix unwrap
-                let v = *self.gfx.get((y * width) + (x + 4)).unwrap();
+        self.gfx.copy_within(4..(width * height), 0);
 
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(v);
-                };
-            }
-        }
-
-        for x in (width - 4)..width {
-            for y in 0..height {
-                if let Some(g) = self.gfx.get_mut((y * width) + x) {
-                    g.commit(false);
-                };
-            }
+        let mut offset: usize;
+        for y in 0..height {
+            offset = (y + 1) * width;
+            self.gfx[(offset - 4)..offset].fill(false);
         }
 
         self.draw = true;
@@ -1021,30 +936,29 @@ impl Chip8 {
 mod tests {
     use std::panic;
 
-    use anyhow::Result;
+    use anyhow::Error;
     use bitvec::bits;
     use bitvec::bitvec;
     use bitvec::prelude::BitArray;
     use bitvec::prelude::BitBox;
     use bitvec::prelude::Lsb0;
     use rand::rngs::mock::StepRng;
-    use sdl2::keyboard::Keycode;
     use sdl2::keyboard::Mod;
+    use sdl2::keyboard::Scancode;
 
     use super::Chip8;
     use crate::profile;
-    use crate::{Action, KeyMapping, Target};
+    use crate::Action;
+    use crate::Target;
 
     #[test]
-    fn test_graphics_needs_refresh() {
+    fn test_graphics_needs_refresh() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.draw = true;
 
         // then
@@ -1052,18 +966,17 @@ mod tests {
 
         // verify
         assert!(needs_refresh);
+        Ok(())
     }
 
     #[test]
-    fn test_graphics_does_not_need_refresh() {
+    fn test_graphics_does_not_need_refresh() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.draw = false;
 
         // then
@@ -1071,18 +984,17 @@ mod tests {
 
         // verify
         assert!(!needs_refresh);
+        Ok(())
     }
 
     #[test]
-    fn test_graphics_clear_refresh() {
+    fn test_graphics_clear_refresh() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.draw = true;
 
         // then
@@ -1090,18 +1002,17 @@ mod tests {
 
         // verify
         assert!(!chip8.draw);
+        Ok(())
     }
 
     #[test]
-    fn test_sound_should_play() {
+    fn test_sound_should_play() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.sound_timer = 1;
 
         // then
@@ -1109,18 +1020,17 @@ mod tests {
 
         // verify
         assert!(should_play);
+        Ok(())
     }
 
     #[test]
-    fn test_sound_should_not_play() {
+    fn test_sound_should_not_play() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.sound_timer = 0;
 
         // then
@@ -1128,18 +1038,17 @@ mod tests {
 
         // verify
         assert!(!should_play);
+        Ok(())
     }
 
     #[test]
-    fn test_timers_count_down() {
+    fn test_timers_count_down() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.delay_timer = 15;
         chip8.sound_timer = 10;
 
@@ -1149,18 +1058,17 @@ mod tests {
         // verify
         assert_eq!(chip8.delay_timer, 14);
         assert_eq!(chip8.sound_timer, 9);
+        Ok(())
     }
 
     #[test]
-    fn test_timers_stop_at_zero() {
+    fn test_timers_stop_at_zero() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.delay_timer = 0;
         chip8.sound_timer = 0;
 
@@ -1170,124 +1078,121 @@ mod tests {
         // verify
         assert_eq!(chip8.delay_timer, 0);
         assert_eq!(chip8.sound_timer, 0);
+        Ok(())
     }
 
     #[test]
-    fn test_quit_event_returns_quit_action() {
+    fn test_quit_event_returns_quit_action() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
 
         // then
-        let result = chip8.handle_key(&sdl2::event::Event::Quit { timestamp: 0 });
+        let result = chip8.handle_key(&sdl2::event::Event::Quit { timestamp: 0 })?;
 
         // verify
-        assert_eq!(result.unwrap(), Some(Action::Quit));
+        assert_eq!(result, Some(Action::Quit));
+        Ok(())
     }
 
     #[test]
-    fn test_keydown_escape_returns_quit_action() {
+    fn test_keydown_escape_returns_quit_action() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
 
         // then
         let result = chip8.handle_key(&sdl2::event::Event::KeyDown {
             timestamp: 0,
             window_id: 0,
-            keycode: Some(Keycode::Escape),
-            scancode: None,
+            scancode: Some(Scancode::Escape),
+            keycode: None,
             keymod: Mod::empty(),
             repeat: false,
-        });
+        })?;
 
         // verify
-        assert_eq!(result.unwrap(), Some(Action::Quit));
+        assert_eq!(result, Some(Action::Quit));
+        Ok(())
     }
 
     #[test]
-    fn test_other_key_events_store_pressed_state() {
+    fn test_other_key_events_store_pressed_state() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
-        let mut results = Vec::<Result<Option<Action>>>::with_capacity(chip8.keymap.len());
+        );
 
         // then
-        for keycode in chip8.keymap.keys() {
-            let event = &sdl2::event::Event::KeyDown {
-                timestamp: 0,
-                window_id: 0,
-                keycode: Some(*keycode),
-                scancode: None,
-                keymod: Mod::empty(),
-                repeat: false,
-            };
-            results.push(chip8.handle_key(event));
-        }
+        let results: Vec<_> = Chip8::key_scan_mapping()
+            .keys()
+            .map(|scancode| {
+                chip8.handle_key(&sdl2::event::Event::KeyDown {
+                    timestamp: 0,
+                    window_id: 0,
+                    scancode: Some(*scancode),
+                    keycode: None,
+                    keymod: Mod::empty(),
+                    repeat: false,
+                })
+            })
+            .collect();
 
         // verify
         let mut k = BitArray::<u16>::ZERO;
         k.fill(true);
         assert_eq!(chip8.key, k);
         assert!(results.into_iter().all(|r| r.unwrap().is_none()));
+        Ok(())
     }
 
     #[test]
-    fn test_other_key_events_store_released_state() {
+    fn test_other_key_events_store_released_state() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.key.fill(true);
-        let mut results = Vec::<Result<Option<Action>>>::with_capacity(chip8.keymap.len());
 
         // then
-        for keycode in chip8.keymap.keys() {
-            let event = &sdl2::event::Event::KeyUp {
-                timestamp: 0,
-                window_id: 0,
-                keycode: Some(*keycode),
-                scancode: None,
-                keymod: Mod::empty(),
-                repeat: false,
-            };
-            results.push(chip8.handle_key(event));
-        }
+        let results: Vec<_> = Chip8::key_scan_mapping()
+            .keys()
+            .map(|scancode| {
+                chip8.handle_key(&sdl2::event::Event::KeyUp {
+                    timestamp: 0,
+                    window_id: 0,
+                    scancode: Some(*scancode),
+                    keycode: None,
+                    keymod: Mod::empty(),
+                    repeat: false,
+                })
+            })
+            .collect();
 
         // verify
         assert_eq!(chip8.key, BitArray::<u16>::ZERO);
         assert!(results.into_iter().all(|r| r.unwrap().is_none()));
+        Ok(())
     }
 
     #[test]
-    fn test_c8_display_clear() {
+    fn test_c8_display_clear() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
 
         chip8.gfx = bitvec![mut 1].repeat(64 * 32).into();
         chip8.draw = false;
@@ -1304,20 +1209,19 @@ mod tests {
         );
         assert!(chip8.draw);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_ignored_opcode() {
+    fn test_ignored_opcode() -> Result<(), Error> {
         // TODO all ignored values
 
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x3;
         chip8.memory[0x201] = 0x21;
 
@@ -1326,18 +1230,17 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_flow_return_ok() {
+    fn test_c8_flow_return_ok() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x400] = 0x00;
         chip8.memory[0x401] = 0xEE;
         chip8.sp = 1;
@@ -1350,19 +1253,18 @@ mod tests {
         // verify
         assert_eq!(chip8.pc, 0x602);
         assert_eq!(chip8.sp, 0);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_flow_return_badstack() {
+    fn test_c8_flow_return_badstack() -> Result<(), Error> {
         let result = catch_unwind_silent(|| {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
                 *profile::profiles().get(&Target::Chip8).unwrap(),
-                KeyMapping::Qwerty,
                 Box::new(rand::thread_rng()),
-            )
-            .expect("Could not initialise Chip8");
+            );
             chip8.memory[0x400] = 0x00;
             chip8.memory[0x401] = 0xEE;
             chip8.sp = 0;
@@ -1375,18 +1277,17 @@ mod tests {
 
         // verify
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_c8_flow_goto() {
+    fn test_c8_flow_goto() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x13;
         chip8.memory[0x201] = 0x21;
 
@@ -1395,18 +1296,17 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x321);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_flow_gosub_ok() {
+    fn test_c8_flow_gosub_ok() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x25;
         chip8.memory[0x201] = 0x73;
         chip8.pc = 0x200;
@@ -1419,19 +1319,18 @@ mod tests {
         assert_eq!(chip8.pc, 0x573);
         assert_eq!(chip8.sp, 0x1);
         assert_eq!(chip8.stack[0], 0x200);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_flow_gosub_badstack() {
+    fn test_c8_flow_gosub_badstack() -> Result<(), Error> {
         let result = catch_unwind_silent(|| {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
                 *profile::profiles().get(&Target::Chip8).unwrap(),
-                KeyMapping::Qwerty,
                 Box::new(rand::thread_rng()),
-            )
-            .expect("Could not initialise Chip8");
+            );
             chip8.memory[0x200] = 0x25;
             chip8.memory[0x201] = 0x73;
             chip8.pc = 0x200;
@@ -1443,500 +1342,478 @@ mod tests {
 
         // verify
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skipifeq_reg_skips() {
+    fn test_c8_cond_skipifeq_reg_skips() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x53;
         chip8.memory[0x201] = 0x10;
-        chip8.v[3] = 2;
-        chip8.v[1] = 2;
+        chip8.registers[3] = 2;
+        chip8.registers[1] = 2;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x204);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skipifeq_reg_does_not_skip() {
+    fn test_c8_cond_skipifeq_reg_does_not_skip() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x55;
         chip8.memory[0x201] = 0x40;
-        chip8.v[5] = 1;
-        chip8.v[4] = 2;
+        chip8.registers[5] = 1;
+        chip8.registers[4] = 2;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_const_set_num() {
+    fn test_c8_const_set_num() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x66;
         chip8.memory[0x201] = 0xD2;
-        chip8.v[6] = 0;
+        chip8.registers[6] = 0;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[6], 0xD2);
+        assert_eq!(chip8.registers[6], 0xD2);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_const_add_num_overflow_no_carry() {
+    fn test_c8_const_add_num_overflow_no_carry() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x76;
         chip8.memory[0x201] = 0xD2;
-        chip8.v[6] = 0x65;
+        chip8.registers[6] = 0x65;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[6], 0x37);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[6], 0x37);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_const_add_num_no_overflow() {
+    fn test_c8_const_add_num_no_overflow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x73;
         chip8.memory[0x201] = 0x12;
-        chip8.v[3] = 0x17;
+        chip8.registers[3] = 0x17;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[3], 0x29);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[3], 0x29);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_assign_set_reg() {
+    fn test_c8_assign_set_reg() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x83;
         chip8.memory[0x201] = 0x10;
-        chip8.v[3] = 1;
-        chip8.v[1] = 52;
+        chip8.registers[3] = 1;
+        chip8.registers[1] = 52;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[3], 52);
+        assert_eq!(chip8.registers[3], 52);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_bitop_or_reg() {
+    fn test_c8_bitop_or_reg() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x83;
         chip8.memory[0x201] = 0xa1;
-        chip8.v[3] = 0b0110;
-        chip8.v[10] = 0b1001;
-        chip8.v[15] = 1;
+        chip8.registers[3] = 0b0110;
+        chip8.registers[10] = 0b1001;
+        chip8.registers[15] = 1;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[3], 0b1111);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[3], 0b1111);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_bitop_and_reg() {
+    fn test_c8_bitop_and_reg() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x83;
         chip8.memory[0x201] = 0x72;
-        chip8.v[3] = 0b0110;
-        chip8.v[7] = 0b1001;
-        chip8.v[15] = 1;
+        chip8.registers[3] = 0b0110;
+        chip8.registers[7] = 0b1001;
+        chip8.registers[15] = 1;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[3], 0);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[3], 0);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_bitop_xor_reg() {
+    fn test_c8_bitop_xor_reg() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x83;
         chip8.memory[0x201] = 0x23;
-        chip8.v[3] = 0b1001;
-        chip8.v[2] = 0b1010;
-        chip8.v[15] = 1;
+        chip8.registers[3] = 0b1001;
+        chip8.registers[2] = 0b1010;
+        chip8.registers[15] = 1;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[3], 0b11);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[3], 0b11);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_math_add_reg_overflow_carry() {
+    fn test_c8_math_add_reg_overflow_carry() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x82;
         chip8.memory[0x201] = 0xC4;
-        chip8.v[2] = 0x82;
-        chip8.v[0xc] = 0xa7;
+        chip8.registers[2] = 0x82;
+        chip8.registers[0xc] = 0xa7;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[2], 0x29);
-        assert_eq!(chip8.v[15], 1);
+        assert_eq!(chip8.registers[2], 0x29);
+        assert_eq!(chip8.registers[15], 1);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_math_add_reg_no_overflow() {
+    fn test_c8_math_add_reg_no_overflow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x83;
         chip8.memory[0x201] = 0x14;
-        chip8.v[3] = 0x17;
-        chip8.v[1] = 0x15;
+        chip8.registers[3] = 0x17;
+        chip8.registers[1] = 0x15;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[3], 0x2c);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[3], 0x2c);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_math_sub_reg_overflow_borrow() {
+    fn test_c8_math_sub_reg_overflow_borrow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x81;
         chip8.memory[0x201] = 0xa5;
-        chip8.v[1] = 0x82;
-        chip8.v[0xa] = 0xa7;
+        chip8.registers[1] = 0x82;
+        chip8.registers[0xa] = 0xa7;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[1], 0xdb);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[1], 0xdb);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_math_sub_reg_no_overflow() {
+    fn test_c8_math_sub_reg_no_overflow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x85;
         chip8.memory[0x201] = 0x45;
-        chip8.v[5] = 0x17;
-        chip8.v[4] = 0x15;
+        chip8.registers[5] = 0x17;
+        chip8.registers[4] = 0x15;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[5], 0x02);
-        assert_eq!(chip8.v[15], 1);
+        assert_eq!(chip8.registers[5], 0x02);
+        assert_eq!(chip8.registers[15], 1);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_math_neg_reg_overflow_borrow() {
+    fn test_c8_math_neg_reg_overflow_borrow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x84;
         chip8.memory[0x201] = 0x67;
-        chip8.v[4] = 0x82;
-        chip8.v[6] = 0x15;
+        chip8.registers[4] = 0x82;
+        chip8.registers[6] = 0x15;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[4], 0x93);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[4], 0x93);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_math_neg_reg_no_overflow() {
+    fn test_c8_math_neg_reg_no_overflow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x81;
         chip8.memory[0x201] = 0x37;
-        chip8.v[1] = 0x13;
-        chip8.v[3] = 0x15;
+        chip8.registers[1] = 0x13;
+        chip8.registers[3] = 0x15;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[1], 0x02);
-        assert_eq!(chip8.v[15], 1);
+        assert_eq!(chip8.registers[1], 0x02);
+        assert_eq!(chip8.registers[15], 1);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skip_eq_num_skips() {
+    fn test_c8_cond_skip_eq_num_skips() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x33;
         chip8.memory[0x201] = 0x77;
-        chip8.v[3] = 0x77;
+        chip8.registers[3] = 0x77;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x204);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skip_eq_num_does_not_skip() {
+    fn test_c8_cond_skip_eq_num_does_not_skip() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x33;
         chip8.memory[0x201] = 0x75;
-        chip8.v[3] = 0x77;
+        chip8.registers[3] = 0x77;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skip_neq_num_skips() {
+    fn test_c8_cond_skip_neq_num_skips() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x43;
         chip8.memory[0x201] = 0x77;
-        chip8.v[3] = 0x77;
+        chip8.registers[3] = 0x77;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skip_neq_num_does_not_skip() {
+    fn test_c8_cond_skip_neq_num_does_not_skip() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x43;
         chip8.memory[0x201] = 0x75;
-        chip8.v[3] = 0x77;
+        chip8.registers[3] = 0x77;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x204);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skipifneq_reg_skips() {
+    fn test_c8_cond_skipifneq_reg_skips() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x93;
         chip8.memory[0x201] = 0x10;
-        chip8.v[3] = 1;
-        chip8.v[1] = 2;
+        chip8.registers[3] = 1;
+        chip8.registers[1] = 2;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x204);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_cond_skipifneq_reg_does_not_skip() {
+    fn test_c8_cond_skipifneq_reg_does_not_skip() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0x95;
         chip8.memory[0x201] = 0x40;
-        chip8.v[5] = 2;
-        chip8.v[4] = 2;
+        chip8.registers[5] = 2;
+        chip8.registers[4] = 2;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_mem_store() {
+    fn test_c8_mem_store() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xA4;
         chip8.memory[0x201] = 0xD8;
 
@@ -1946,66 +1823,63 @@ mod tests {
         // verify
         assert_eq!(chip8.i, 0x4D8);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_flow_jump() {
+    fn test_c8_flow_jump() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xB8;
         chip8.memory[0x201] = 0xB3;
-        chip8.v[0] = 0x55;
+        chip8.registers[0] = 0x55;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.pc, 0x908);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_rand_and_reg() {
+    fn test_c8_rand_and_reg() -> Result<(), Error> {
         // when
         let rng = StepRng::new(23, 2);
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rng),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xC2;
         chip8.memory[0x201] = 0x66;
-        chip8.v[2] = 0x23;
+        chip8.registers[2] = 0x23;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[2], 0x6);
+        assert_eq!(chip8.registers[2], 0x6);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_draw_sprite_no_unset() {
+    fn test_c8_draw_sprite_no_unset() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xD2;
         chip8.memory[0x201] = 0x32;
-        chip8.v[2] = 0x7;
-        chip8.v[3] = 0x9;
+        chip8.registers[2] = 0x7;
+        chip8.registers[3] = 0x9;
         chip8.i = 0x600;
         chip8.memory[0x600] = 0xFF;
         chip8.memory[0x601] = 0xFF;
@@ -2020,25 +1894,24 @@ mod tests {
         assert_eq!(chip8.gfx[591..647], bits!(0).repeat(56));
         assert_eq!(chip8.gfx[647..655], bits!(1).repeat(8));
         assert_eq!(chip8.gfx[655..2048], bits!(0).repeat(1393));
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[15], 0);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_draw_sprite_unset() {
+    fn test_c8_draw_sprite_unset() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
 
         chip8.gfx = bits![1].repeat(64 * 32).into();
         chip8.memory[0x200] = 0xD2;
         chip8.memory[0x201] = 0x32;
-        chip8.v[2] = 0x7;
-        chip8.v[3] = 0x9;
+        chip8.registers[2] = 0x7;
+        chip8.registers[3] = 0x9;
         chip8.i = 0x600;
         chip8.memory[0x600] = 0xFF;
         chip8.memory[0x601] = 0xFF;
@@ -2055,37 +1928,36 @@ mod tests {
         assert_eq!(chip8.gfx[647..655], bits!(0).repeat(8));
         assert_eq!(chip8.gfx[655..2048], bits!(1).repeat(1393));
 
-        assert_eq!(chip8.v[15], 1);
+        assert_eq!(chip8.registers[15], 1);
+        Ok(())
     }
 
     // #[test]
-    // fn test_c8_draw_sprite_overlap_x() {
+    // fn test_c8_draw_sprite_overlap_x() -> Result<(), Error> {
 
     // }
 
     // #[test]
-    // fn test_c8_draw_sprite_overlap_y() {
+    // fn test_c8_draw_sprite_overlap_y() -> Result<(), Error> {
 
     // }
 
     // #[test]
-    // fn test_c8_draw_sprite_overlap_x_and_y() {
+    // fn test_c8_draw_sprite_overlap_x_and_y() -> Result<(), Error> {
 
     // }
 
     #[test]
-    fn test_c8_key_pressedskip_pressed() {
+    fn test_c8_key_pressedskip_pressed() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0x9E;
-        chip8.v[1] = 0x8;
+        chip8.registers[1] = 0x8;
         if let Some(k) = chip8.key.get_mut(8) {
             k.commit(true);
         };
@@ -2095,21 +1967,20 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x204);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_key_pressedskip_notpressed() {
+    fn test_c8_key_pressedskip_notpressed() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0x9E;
-        chip8.v[1] = 0x7;
+        chip8.registers[1] = 0x7;
         if let Some(k) = chip8.key.get_mut(7) {
             k.commit(false);
         };
@@ -2119,21 +1990,20 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_key_notpressedskip_pressed() {
+    fn test_c8_key_notpressedskip_pressed() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0xA1;
-        chip8.v[1] = 0x8;
+        chip8.registers[1] = 0x8;
         if let Some(k) = chip8.key.get_mut(8) {
             k.commit(true);
         };
@@ -2143,21 +2013,20 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_key_notpressedskip_notpressed() {
+    fn test_c8_key_notpressedskip_notpressed() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xE1;
         chip8.memory[0x201] = 0xA1;
-        chip8.v[1] = 0x7;
+        chip8.registers[1] = 0x7;
         if let Some(k) = chip8.key.get_mut(7) {
             k.commit(false);
         };
@@ -2167,44 +2036,42 @@ mod tests {
 
         // verify
         assert_eq!(chip8.pc, 0x204);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_timer_delay_store() {
+    fn test_c8_timer_delay_store() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xF4;
         chip8.memory[0x201] = 0x07;
-        chip8.v[4] = 0x3;
+        chip8.registers[4] = 0x3;
         chip8.delay_timer = 0x55;
 
         // then
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[4], 0x55);
+        assert_eq!(chip8.registers[4], 0x55);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_timer_delay_set() {
+    fn test_c8_timer_delay_set() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xF1;
         chip8.memory[0x201] = 0x15;
-        chip8.v[1] = 0x17;
+        chip8.registers[1] = 0x17;
         chip8.delay_timer = 0x55;
 
         // then
@@ -2213,21 +2080,20 @@ mod tests {
         // verify
         assert_eq!(chip8.delay_timer, 0x17);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_timer_sound_set() {
+    fn test_c8_timer_sound_set() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xF9;
         chip8.memory[0x201] = 0x18;
-        chip8.v[9] = 0x22;
+        chip8.registers[9] = 0x22;
         chip8.sound_timer = 0x15;
 
         // then
@@ -2236,74 +2102,71 @@ mod tests {
         // verify
         assert_eq!(chip8.sound_timer, 0x22);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_mem_addi_no_overflow() {
+    fn test_c8_mem_addi_no_overflow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xF6;
         chip8.memory[0x201] = 0x1E;
-        chip8.v[6] = 0x44;
+        chip8.registers[6] = 0x44;
         chip8.i = 0x3;
-        chip8.v[15] = 0;
+        chip8.registers[15] = 0;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.i, 0x47);
-        assert_eq!(chip8.v[15], 0);
+        assert_eq!(chip8.registers[15], 0);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_mem_addi_overflow() {
+    fn test_c8_mem_addi_overflow() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.memory[0x200] = 0xF3;
         chip8.memory[0x201] = 0x1E;
-        chip8.v[3] = 0x04;
+        chip8.registers[3] = 0x04;
         chip8.i = 0xFFE;
-        chip8.v[15] = 0;
+        chip8.registers[15] = 0;
 
         // then
         chip8.emulate_cycle();
 
         // verify
         assert_eq!(chip8.i, 0x2);
-        assert_eq!(chip8.v[15], 1);
+        assert_eq!(chip8.registers[15], 1);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_mem_reg_dump() {
+    fn test_c8_mem_reg_dump() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.i = 0xC60;
         chip8.memory[0x200] = 0xF3;
         chip8.memory[0x201] = 0x55;
-        chip8.v[0] = 0xDE;
-        chip8.v[1] = 0xAD;
-        chip8.v[2] = 0xBE;
+        chip8.registers[0] = 0xDE;
+        chip8.registers[1] = 0xAD;
+        chip8.registers[2] = 0xBE;
         let expected_memory: [u8; 5] = [0xDE, 0xAD, 0xBE, 0, 0];
 
         // then
@@ -2313,24 +2176,23 @@ mod tests {
         assert_eq!(chip8.memory[0xC60..0xC65], expected_memory);
         assert_eq!(chip8.i, 0xC64);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_sc_mem_reg_dump() {
+    fn test_sc_mem_reg_dump() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::SuperChip,
             *profile::profiles().get(&Target::SuperChip).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise SuperChip");
+        );
         chip8.i = 0xC60;
         chip8.memory[0x200] = 0xF3;
         chip8.memory[0x201] = 0x55;
-        chip8.v[0] = 0xDE;
-        chip8.v[1] = 0xAD;
-        chip8.v[2] = 0xBE;
+        chip8.registers[0] = 0xDE;
+        chip8.registers[1] = 0xAD;
+        chip8.registers[2] = 0xBE;
         let expected_memory: [u8; 5] = [0xDE, 0xAD, 0xBE, 0, 0];
 
         // then
@@ -2340,18 +2202,17 @@ mod tests {
         assert_eq!(chip8.memory[0xC60..0xC65], expected_memory);
         assert_eq!(chip8.i, 0xC60);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_c8_mem_reg_load() {
+    fn test_c8_mem_reg_load() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles().get(&Target::Chip8).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.i = 0xD00;
         chip8.memory[0x200] = 0xF4;
         chip8.memory[0x201] = 0x65;
@@ -2365,21 +2226,20 @@ mod tests {
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[0..6], expected_registers);
+        assert_eq!(chip8.registers[0..6], expected_registers);
         assert_eq!(chip8.i, 0xD05);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_sc_mem_reg_load() {
+    fn test_sc_mem_reg_load() -> Result<(), Error> {
         // when
         let mut chip8 = Chip8::new(
             Target::SuperChip,
             *profile::profiles().get(&Target::SuperChip).unwrap(),
-            KeyMapping::Qwerty,
             Box::new(rand::thread_rng()),
-        )
-        .expect("Could not initialise Chip8");
+        );
         chip8.i = 0xD00;
         chip8.memory[0x200] = 0xF4;
         chip8.memory[0x201] = 0x65;
@@ -2393,22 +2253,21 @@ mod tests {
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.v[0..6], expected_registers);
+        assert_eq!(chip8.registers[0..6], expected_registers);
         assert_eq!(chip8.i, 0xD00);
         assert_eq!(chip8.pc, 0x202);
+        Ok(())
     }
 
     #[test]
-    fn test_unknown_opcode_panics() {
+    fn test_unknown_opcode_panics() -> Result<(), Error> {
         let result = catch_unwind_silent(|| {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
                 *profile::profiles().get(&Target::Chip8).unwrap(),
-                KeyMapping::Qwerty,
                 Box::new(rand::thread_rng()),
-            )
-            .expect("Could not initialise Chip8");
+            );
             chip8.memory[0x200] = 0xFF;
             chip8.memory[0x201] = 0xFF;
 
@@ -2418,6 +2277,7 @@ mod tests {
 
         // verify
         assert!(result.is_err());
+        Ok(())
     }
 
     fn catch_unwind_silent<F: FnOnce() -> R + panic::UnwindSafe, R>(

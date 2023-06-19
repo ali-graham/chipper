@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
 
 use crate::Target;
 
@@ -41,8 +40,8 @@ impl Profile {
 }
 
 pub(crate) fn profiles() -> &'static HashMap<Target, Profile> {
-    static CELL: OnceCell<HashMap<Target, Profile>> = OnceCell::new();
-    CELL.get_or_init(|| {
+    static LOCK: OnceLock<HashMap<Target, Profile>> = OnceLock::new();
+    LOCK.get_or_init(|| {
         HashMap::from([
             (
                 Target::Chip8,

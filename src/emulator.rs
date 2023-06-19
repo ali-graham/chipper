@@ -11,7 +11,6 @@ use crate::chip8;
 use crate::hardware::Hardware;
 use crate::profile;
 use crate::Action;
-use crate::KeyMapping;
 use crate::ProcessType;
 use crate::Target;
 
@@ -26,14 +25,14 @@ pub(super) struct Emulator {
 }
 
 impl Emulator {
-    pub(super) fn new(scale: Option<u8>, key_mapping: KeyMapping, target: Target) -> Result<Self> {
+    pub(super) fn new(scale: Option<u8>, target: Target) -> Result<Self> {
         let profile: profile::Profile = *profile::profiles()
             .get(&target)
             .context("Unknown target architecture")?;
 
         let hardware = Hardware::new(scale, profile)?;
 
-        let chip8 = chip8::Chip8::new(target, profile, key_mapping, Box::new(rand::thread_rng()))?;
+        let chip8 = chip8::Chip8::new(target, profile, Box::new(rand::thread_rng()));
 
         Ok(Emulator {
             target,
