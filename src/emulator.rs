@@ -9,7 +9,8 @@ use anyhow::Result;
 
 use crate::chip8;
 use crate::hardware::Hardware;
-use crate::profile;
+use crate::profile::profiles;
+use crate::profile::Profile;
 use crate::Action;
 use crate::ProcessType;
 use crate::Target;
@@ -19,14 +20,14 @@ const TICK: Duration = Duration::from_millis(1_000 / 60);
 type Ticker = Box<dyn FnMut(&mut Emulator) -> Option<Action>>;
 
 pub(super) struct Emulator {
-    target: Target,
+    profile: Profile,
     hardware: Hardware,
     chip8: chip8::Chip8,
 }
 
 impl Emulator {
     pub(super) fn new(scale: Option<u8>, target: Target) -> Result<Self> {
-        let profile: profile::Profile = *profile::profiles()
+        let profile: Profile = *profiles()
             .get(&target)
             .context("Unknown target architecture")?;
 
@@ -35,7 +36,7 @@ impl Emulator {
         let chip8 = chip8::Chip8::new(target, profile, Box::new(rand::thread_rng()));
 
         Ok(Emulator {
-            target,
+            profile,
             hardware,
             chip8,
         })
@@ -52,12 +53,10 @@ impl Emulator {
         };
 
         loop {
-            if let Some(Action::Quit) = ticker(self) {
-                self.refresh()?;
-                break;
-            }
-
-            if let Some(Action::Quit) = self.refresh()? {
+            // we always want a refresh after a tick, even if about to quit
+            if matches!(ticker(self), Some(Action::Quit))
+                | matches!(self.refresh()?, Some(Action::Quit))
+            {
                 break;
             }
         }
@@ -83,7 +82,8 @@ impl Emulator {
 
             remaining = TICK.saturating_sub(start.elapsed());
 
-            if ((self.target == Target::Chip8) && self.chip8.graphics_needs_refresh())
+            if ((self.profile.lores_display_wait() && !self.chip8.hires_mode())
+                && self.chip8.graphics_needs_refresh())
                 || remaining.is_zero()
             {
                 break;
@@ -103,7 +103,7 @@ impl Emulator {
     //         self.chip8.emulate_cycle();
     //         // TODO block waiting for ADVANCE event
     //     }
-
+    //
     //     None
     // }
 

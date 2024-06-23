@@ -7,6 +7,7 @@ use crate::Target;
 pub(crate) struct Profile {
     screen_width: u8,
     screen_height: u8,
+    lores_display_wait: bool,
     default_screen_scale: u8,
     memory_capacity: usize,
     user_register_count: u8,
@@ -21,6 +22,11 @@ impl Profile {
     #[must_use]
     pub(crate) fn screen_height(self) -> u8 {
         self.screen_height
+    }
+
+    #[must_use]
+    pub(crate) fn lores_display_wait(self) -> bool {
+        self.lores_display_wait
     }
 
     #[must_use]
@@ -48,9 +54,21 @@ pub(crate) fn profiles() -> &'static HashMap<Target, Profile> {
                 Profile {
                     screen_width: 64,
                     screen_height: 32,
+                    lores_display_wait: true,
                     default_screen_scale: 12,
                     memory_capacity: 4_096,
                     user_register_count: 0,
+                },
+            ),
+            (
+                Target::SuperChipLegacy,
+                Profile {
+                    screen_width: 128,
+                    screen_height: 64,
+                    lores_display_wait: true,
+                    default_screen_scale: 6,
+                    memory_capacity: 4_096,
+                    user_register_count: 8,
                 },
             ),
             (
@@ -58,6 +76,7 @@ pub(crate) fn profiles() -> &'static HashMap<Target, Profile> {
                 Profile {
                     screen_width: 128,
                     screen_height: 64,
+                    lores_display_wait: false,
                     default_screen_scale: 6,
                     memory_capacity: 4_096,
                     user_register_count: 8,
@@ -68,6 +87,7 @@ pub(crate) fn profiles() -> &'static HashMap<Target, Profile> {
                 Profile {
                     screen_width: 128,
                     screen_height: 64,
+                    lores_display_wait: false,
                     default_screen_scale: 6,
                     memory_capacity: 65_536,
                     user_register_count: 16,

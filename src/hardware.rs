@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use anyhow::Error;
 use anyhow::Result;
 use bitvec::prelude::BitVec;
@@ -58,7 +59,7 @@ impl Hardware {
         let dm = video_subsys.desktop_display_mode(0).map_err(Error::msg)?;
 
         if i32::from(width) > dm.w || i32::from(height) > dm.h {
-            return Err(Error::msg("Window too large"));
+            return Err(anyhow!("Window too large"));
         }
 
         let window = video_subsys

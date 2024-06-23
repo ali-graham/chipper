@@ -96,7 +96,6 @@ impl Chip8 {
         Self {
             target,
             rng,
-            // keymap,
             memory,
 
             registers: [0u8; 16],
@@ -137,6 +136,10 @@ impl Chip8 {
 
     pub(super) fn graphics_clear_refresh(&mut self) {
         self.draw = false;
+    }
+
+    pub(super) fn hires_mode(&self) -> bool {
+        self.hires
     }
 
     pub(super) fn resolution_scale(&self) -> u8 {
@@ -227,7 +230,7 @@ impl Chip8 {
         let opcode = (u16::from(self.memory[usize::from(self.pc)]) << 8)
             | u16::from(self.memory[usize::from(self.pc + 1)]);
 
-        let sc = matches!(self.target, Target::SuperChip);
+        let sc = matches!(self.target, Target::SuperChipLegacy | Target::SuperChip);
         let xo = matches!(self.target, Target::XoChip);
 
         if (opcode == 0x00FD) && (sc || xo) {
@@ -411,7 +414,7 @@ impl Chip8 {
         self.registers[reg_x] |= self.registers[reg_y];
         match self.target {
             Target::Chip8 => self.registers[15] = 0,
-            Target::SuperChip | Target::XoChip => {}
+            Target::SuperChipLegacy | Target::SuperChip | Target::XoChip => {}
         }
 
         2
@@ -424,7 +427,7 @@ impl Chip8 {
         self.registers[reg_x] &= self.registers[reg_y];
         match self.target {
             Target::Chip8 => self.registers[15] = 0,
-            Target::SuperChip | Target::XoChip => {}
+            Target::SuperChipLegacy | Target::SuperChip | Target::XoChip => {}
         }
 
         2
@@ -437,7 +440,7 @@ impl Chip8 {
         self.registers[reg_x] ^= self.registers[reg_y];
         match self.target {
             Target::Chip8 => self.registers[15] = 0,
-            Target::SuperChip | Target::XoChip => {}
+            Target::SuperChipLegacy | Target::SuperChip | Target::XoChip => {}
         }
 
         2
@@ -473,7 +476,7 @@ impl Chip8 {
 
         let val = match self.target {
             Target::Chip8 | Target::XoChip => self.registers[Self::register_y(o)],
-            Target::SuperChip => self.registers[reg_x],
+            Target::SuperChipLegacy | Target::SuperChip => self.registers[reg_x],
         };
 
         self.registers[reg_x] = val.checked_shr(1).unwrap_or(0);
@@ -498,10 +501,10 @@ impl Chip8 {
 
         let val = match self.target {
             Target::Chip8 | Target::XoChip => self.registers[Self::register_y(o)],
-            Target::SuperChip => self.registers[reg_x],
+            Target::SuperChipLegacy | Target::SuperChip => self.registers[reg_x],
         };
 
-        self.registers[reg_x] = val.checked_shl(1).unwrap_or(u8::max_value());
+        self.registers[reg_x] = val.checked_shl(1).unwrap_or(u8::MAX);
         self.registers[15] = val.checked_shr(7).unwrap_or(0) & 0x1;
         2
     }
@@ -529,7 +532,9 @@ impl Chip8 {
         self.pc = (o & 0x0FFF)
             + match self.target {
                 Target::Chip8 | Target::XoChip => u16::from(self.registers[0]),
-                Target::SuperChip => u16::from(self.registers[Self::register_x(o)]),
+                Target::SuperChipLegacy | Target::SuperChip => {
+                    u16::from(self.registers[Self::register_x(o)])
+                }
             };
 
         true
@@ -552,18 +557,23 @@ impl Chip8 {
         let data_count = o & 0x000F;
 
         // FIXME could cache in struct and change when switching hires mode
-        let (w, h) =
-            if (self.target == Target::SuperChip || self.target == Target::XoChip) && !self.hires {
-                (
-                    self.profile.screen_width() / 2,
-                    self.profile.screen_height() / 2,
-                )
-            } else {
-                (self.profile.screen_width(), self.profile.screen_height())
-            };
+        let (w, h) = if matches!(
+            self.target,
+            Target::SuperChipLegacy | Target::SuperChip | Target::XoChip
+        ) && !self.hires
+        {
+            (
+                self.profile.screen_width() / 2,
+                self.profile.screen_height() / 2,
+            )
+        } else {
+            (self.profile.screen_width(), self.profile.screen_height())
+        };
 
-        let unset = if (self.target == Target::SuperChip || self.target == Target::XoChip)
-            && self.hires
+        let unset = if matches!(
+            self.target,
+            Target::SuperChipLegacy | Target::SuperChip | Target::XoChip
+        ) && self.hires
             && data_count == 0
         {
             self.draw_sprite(16, self.registers[reg_x], self.registers[reg_y], w, h, 16)
@@ -761,7 +771,7 @@ impl Chip8 {
 
         match self.target {
             Target::Chip8 | Target::XoChip => self.i += reg_num + 1,
-            Target::SuperChip => {}
+            Target::SuperChipLegacy | Target::SuperChip => {}
         }
 
         2
@@ -776,7 +786,7 @@ impl Chip8 {
 
         match self.target {
             Target::Chip8 | Target::XoChip => self.i += reg_num + 1,
-            Target::SuperChip => {}
+            Target::SuperChipLegacy | Target::SuperChip => {}
         }
 
         2
@@ -956,7 +966,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.draw = true;
@@ -974,7 +986,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.draw = false;
@@ -992,7 +1006,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.draw = true;
@@ -1010,7 +1026,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.sound_timer = 1;
@@ -1028,7 +1046,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.sound_timer = 0;
@@ -1046,7 +1066,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.delay_timer = 15;
@@ -1066,7 +1088,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.delay_timer = 0;
@@ -1086,7 +1110,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
 
@@ -1103,7 +1129,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
 
@@ -1127,7 +1155,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
 
@@ -1150,7 +1180,7 @@ mod tests {
         let mut k = BitArray::<u16>::ZERO;
         k.fill(true);
         assert_eq!(chip8.key, k);
-        assert!(results.into_iter().all(|r| r.unwrap().is_none()));
+        assert!(results.into_iter().all(|r| r.is_ok_and(|o| o.is_none())));
         Ok(())
     }
 
@@ -1159,7 +1189,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.key.fill(true);
@@ -1181,7 +1213,7 @@ mod tests {
 
         // verify
         assert_eq!(chip8.key, BitArray::<u16>::ZERO);
-        assert!(results.into_iter().all(|r| r.unwrap().is_none()));
+        assert!(results.into_iter().all(|r| r.is_ok_and(|o| o.is_none())));
         Ok(())
     }
 
@@ -1190,7 +1222,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
 
@@ -1219,7 +1253,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x3;
@@ -1238,7 +1274,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x400] = 0x00;
@@ -1262,7 +1300,9 @@ mod tests {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
-                *profile::profiles().get(&Target::Chip8).unwrap(),
+                *profile::profiles()
+                    .get(&Target::Chip8)
+                    .expect("Unknown profile"),
                 Box::new(rand::thread_rng()),
             );
             chip8.memory[0x400] = 0x00;
@@ -1285,7 +1325,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x13;
@@ -1304,7 +1346,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x25;
@@ -1328,7 +1372,9 @@ mod tests {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
-                *profile::profiles().get(&Target::Chip8).unwrap(),
+                *profile::profiles()
+                    .get(&Target::Chip8)
+                    .expect("Unknown profile"),
                 Box::new(rand::thread_rng()),
             );
             chip8.memory[0x200] = 0x25;
@@ -1350,7 +1396,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x53;
@@ -1371,7 +1419,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x55;
@@ -1392,7 +1442,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x66;
@@ -1413,7 +1465,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x76;
@@ -1435,7 +1489,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x73;
@@ -1457,7 +1513,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1479,7 +1537,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1503,7 +1563,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1527,7 +1589,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1551,7 +1615,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x82;
@@ -1574,7 +1640,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1597,7 +1665,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x81;
@@ -1620,7 +1690,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x85;
@@ -1643,7 +1715,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x84;
@@ -1666,7 +1740,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x81;
@@ -1689,7 +1765,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x33;
@@ -1709,7 +1787,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x33;
@@ -1729,7 +1809,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x43;
@@ -1749,7 +1831,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x43;
@@ -1769,7 +1853,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x93;
@@ -1790,7 +1876,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x95;
@@ -1811,7 +1899,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xA4;
@@ -1831,7 +1921,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xB8;
@@ -1852,7 +1944,9 @@ mod tests {
         let rng = StepRng::new(23, 2);
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rng),
         );
         chip8.memory[0x200] = 0xC2;
@@ -1873,7 +1967,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xD2;
@@ -1903,7 +1999,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
 
@@ -1952,7 +2050,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -1975,7 +2075,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -1998,7 +2100,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -2021,7 +2125,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -2044,7 +2150,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF4;
@@ -2066,7 +2174,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF1;
@@ -2088,7 +2198,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF9;
@@ -2110,7 +2222,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF6;
@@ -2134,7 +2248,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF3;
@@ -2158,7 +2274,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xC60;
@@ -2184,7 +2302,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::SuperChip,
-            *profile::profiles().get(&Target::SuperChip).unwrap(),
+            *profile::profiles()
+                .get(&Target::SuperChip)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xC60;
@@ -2210,7 +2330,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::Chip8,
-            *profile::profiles().get(&Target::Chip8).unwrap(),
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xD00;
@@ -2237,7 +2359,9 @@ mod tests {
         // when
         let mut chip8 = Chip8::new(
             Target::SuperChip,
-            *profile::profiles().get(&Target::SuperChip).unwrap(),
+            *profile::profiles()
+                .get(&Target::SuperChip)
+                .expect("Unknown profile"),
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xD00;
@@ -2265,7 +2389,9 @@ mod tests {
             // when
             let mut chip8 = Chip8::new(
                 Target::Chip8,
-                *profile::profiles().get(&Target::Chip8).unwrap(),
+                *profile::profiles()
+                    .get(&Target::Chip8)
+                    .expect("Unknown profile"),
                 Box::new(rand::thread_rng()),
             );
             chip8.memory[0x200] = 0xFF;

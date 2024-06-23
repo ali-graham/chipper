@@ -16,7 +16,7 @@ impl AudioCallback for SquareWave {
 
     fn callback(&mut self, out: &mut [f32]) {
         // Generate a square wave
-        for x in out.iter_mut() {
+        for x in out {
             *x = if self.phase <= 0.5 {
                 self.volume
             } else {

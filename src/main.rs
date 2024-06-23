@@ -22,6 +22,7 @@ pub(crate) enum ProcessType {
 #[derive(ValueEnum, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub(crate) enum Target {
     Chip8,
+    SuperChipLegacy,
     SuperChip,
     XoChip,
 }
