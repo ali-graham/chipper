@@ -2,13 +2,14 @@ use anyhow::anyhow;
 use anyhow::Error;
 use anyhow::Result;
 use bitvec::prelude::BitVec;
-use sdl2::event::EventPollIterator;
-use sdl2::pixels::Color;
-use sdl2::rect::Rect;
-use sdl2::render::Canvas;
-use sdl2::video::Window;
-use sdl2::EventPump;
-use sdl2::VideoSubsystem;
+use sdl3::event::EventPollIterator;
+use sdl3::pixels::Color;
+use sdl3::rect::Rect;
+use sdl3::render::Canvas;
+use sdl3::render::FRect;
+use sdl3::video::Window;
+use sdl3::EventPump;
+use sdl3::VideoSubsystem;
 
 use crate::audio;
 use crate::profile;
@@ -26,7 +27,7 @@ pub(super) struct Hardware {
 
 impl Hardware {
     pub(super) fn new(scale: Option<u8>, profile: profile::Profile) -> Result<Self> {
-        let sdl_context = sdl2::init().map_err(Error::msg)?;
+        let sdl_context = sdl3::init().map_err(Error::msg)?;
 
         let video = sdl_context.video().map_err(Error::msg)?;
         let scale = scale.unwrap_or_else(|| profile.default_screen_scale());
@@ -96,7 +97,9 @@ impl Hardware {
                     });
                 rect.set_x(i32::from(xline) * s);
                 rect.set_y(i32::from(yline) * s);
-                self.canvas.fill_rect(rect).map_err(Error::msg)?;
+                self.canvas
+                    .fill_rect(FRect::from(rect))
+                    .map_err(Error::msg)?;
             }
         }
         self.canvas.present();

@@ -4,7 +4,7 @@ description = "A Chip-8/SuperChip/XoChip emulator"
 version = "0.2.0"
 authors = ["Ali Graham <ali.graham@gmail.com>"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.77"
 readme = "README.md"
 repository = "https://github.com/ali-graham/chipper"
 license = "MIT"
@@ -15,4 +15,6 @@ anyhow = "1"
 bitvec = "1"
 clap = { version = "4", features = ["derive"]}
 rand = "0.8"
-sdl2 = "0.35"
+
+[dependencies.sdl3]
+git = "https://github.com/revmischa/sdl3-rs"

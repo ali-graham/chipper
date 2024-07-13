@@ -8,8 +8,8 @@ use bitvec::prelude::BitVec;
 use bitvec::BitArr;
 use rand::Rng;
 use rand::RngCore;
-use sdl2::event::Event;
-use sdl2::keyboard::Scancode;
+use sdl3::event::Event;
+use sdl3::keyboard::Scancode;
 
 use crate::profile;
 use crate::Action;
@@ -953,8 +953,8 @@ mod tests {
     use bitvec::prelude::BitBox;
     use bitvec::prelude::Lsb0;
     use rand::rngs::mock::StepRng;
-    use sdl2::keyboard::Mod;
-    use sdl2::keyboard::Scancode;
+    use sdl3::keyboard::Mod;
+    use sdl3::keyboard::Scancode;
 
     use super::Chip8;
     use crate::profile;
@@ -1117,7 +1117,7 @@ mod tests {
         );
 
         // then
-        let result = chip8.handle_key(&sdl2::event::Event::Quit { timestamp: 0 })?;
+        let result = chip8.handle_key(&sdl3::event::Event::Quit { timestamp: 0 })?;
 
         // verify
         assert_eq!(result, Some(Action::Quit));
@@ -1136,7 +1136,7 @@ mod tests {
         );
 
         // then
-        let result = chip8.handle_key(&sdl2::event::Event::KeyDown {
+        let result = chip8.handle_key(&sdl3::event::Event::KeyDown {
             timestamp: 0,
             window_id: 0,
             scancode: Some(Scancode::Escape),
@@ -1165,7 +1165,7 @@ mod tests {
         let results: Vec<_> = Chip8::key_scan_mapping()
             .keys()
             .map(|scancode| {
-                chip8.handle_key(&sdl2::event::Event::KeyDown {
+                chip8.handle_key(&sdl3::event::Event::KeyDown {
                     timestamp: 0,
                     window_id: 0,
                     scancode: Some(*scancode),
@@ -1200,7 +1200,7 @@ mod tests {
         let results: Vec<_> = Chip8::key_scan_mapping()
             .keys()
             .map(|scancode| {
-                chip8.handle_key(&sdl2::event::Event::KeyUp {
+                chip8.handle_key(&sdl3::event::Event::KeyUp {
                     timestamp: 0,
                     window_id: 0,
                     scancode: Some(*scancode),

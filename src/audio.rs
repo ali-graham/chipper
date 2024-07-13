@@ -1,9 +1,9 @@
 use anyhow::Error;
 use anyhow::Result;
-use sdl2::audio::AudioCallback;
-use sdl2::audio::AudioDevice;
-use sdl2::audio::AudioSpecDesired;
-use sdl2::audio::AudioStatus;
+use sdl3::audio::AudioCallback;
+use sdl3::audio::AudioDevice;
+use sdl3::audio::AudioSpecDesired;
+use sdl3::audio::AudioStatus;
 
 struct SquareWave {
     phase_inc: f64,
@@ -32,7 +32,7 @@ pub(super) struct Audio {
 }
 
 impl Audio {
-    pub(super) fn new(context: &sdl2::Sdl) -> Result<Self> {
+    pub(super) fn new(context: &sdl3::Sdl) -> Result<Self> {
         let desired_spec = AudioSpecDesired {
             freq: Some(44_100),
             channels: Some(1), // mono
