@@ -38,6 +38,7 @@ const NUMBER_OF_KEYS: usize = 16;
 const NUMBER_OF_REGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
 
+#[must_use]
 pub(super) struct Chip8 {
     registers: [u8; NUMBER_OF_REGISTERS], // registers
     user_registers: Option<Box<[u8]>>,
@@ -394,8 +395,8 @@ impl Chip8 {
         // 7XNN - Add the value NN to register VX (carry flag is not changed)
         let reg = Self::register_x(o);
 
-        let result_carry = self.registers[reg].overflowing_add(Self::opcode_value(o));
-        self.registers[reg] = result_carry.0;
+        let (result, _) = self.registers[reg].overflowing_add(Self::opcode_value(o));
+        self.registers[reg] = result;
         2
     }
 
@@ -451,9 +452,9 @@ impl Chip8 {
         // VF = 1 if overflow
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        let result_carry = self.registers[reg_x].overflowing_add(self.registers[reg_y]);
-        self.registers[reg_x] = result_carry.0;
-        self.registers[15] = u8::from(result_carry.1);
+        let (result, carry) = self.registers[reg_x].overflowing_add(self.registers[reg_y]);
+        self.registers[reg_x] = result;
+        self.registers[15] = u8::from(carry);
         2
     }
 
@@ -462,9 +463,9 @@ impl Chip8 {
         // VF = 1 if no borrow, 0 if there is
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        let result_borrow = self.registers[reg_x].overflowing_sub(self.registers[reg_y]);
-        self.registers[reg_x] = result_borrow.0;
-        self.registers[15] = u8::from(!result_borrow.1);
+        let (result, borrow) = self.registers[reg_x].overflowing_sub(self.registers[reg_y]);
+        self.registers[reg_x] = result;
+        self.registers[15] = u8::from(!borrow);
         2
     }
 
@@ -489,9 +490,9 @@ impl Chip8 {
         // VF = 1 if no borrow, 0 if there is
         let (reg_x, reg_y) = Self::register_xy(o);
 
-        let result_borrow = self.registers[reg_y].overflowing_sub(self.registers[reg_x]);
-        self.registers[reg_x] = result_borrow.0;
-        self.registers[15] = u8::from(!result_borrow.1);
+        let (result, borrow) = self.registers[reg_y].overflowing_sub(self.registers[reg_x]);
+        self.registers[reg_x] = result;
+        self.registers[15] = u8::from(!borrow);
         2
     }
 

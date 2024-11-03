@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 
 use crate::Target;
 
+#[must_use]
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Profile {
     screen_width: u8,

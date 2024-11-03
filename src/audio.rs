@@ -5,6 +5,7 @@ use sdl2::audio::AudioDevice;
 use sdl2::audio::AudioSpecDesired;
 use sdl2::audio::AudioStatus;
 
+#[must_use]
 struct SquareWave {
     phase_inc: f64,
     phase: f64,
@@ -27,6 +28,7 @@ impl AudioCallback for SquareWave {
     }
 }
 
+#[must_use]
 pub(super) struct Audio {
     device: AudioDevice<SquareWave>,
 }
