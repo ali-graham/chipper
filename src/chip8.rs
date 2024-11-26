@@ -240,10 +240,22 @@ impl Chip8 {
 
         // these operations manipulate the program counter value directly
         if match opcode {
-            0x00EE => self.c8_flow_return(),
-            o if o & 0xF000 == 0x1000 => self.c8_flow_goto(o),
-            o if o & 0xF000 == 0x2000 => self.c8_flow_gosub(o),
-            o if o & 0xF000 == 0xB000 => self.c8_flow_jump(o),
+            0x00EE => {
+                self.c8_flow_return();
+                true
+            }
+            o if o & 0xF000 == 0x1000 => {
+                self.c8_flow_goto(o);
+                true
+            }
+            o if o & 0xF000 == 0x2000 => {
+                self.c8_flow_gosub(o);
+                true
+            }
+            o if o & 0xF000 == 0xB000 => {
+                self.c8_flow_jump(o);
+                true
+            }
             _ => false,
         } {
             return None;
@@ -317,27 +329,24 @@ impl Chip8 {
         None
     }
 
-    fn c8_flow_return(&mut self) -> bool {
+    fn c8_flow_return(&mut self) {
         // 00EE - return from a subroutine
         self.sp = self.sp.checked_sub(1).expect("stack pointer too low");
         self.pc = self.stack[usize::from(self.sp)] + 2;
-        true
     }
 
-    fn c8_flow_goto(&mut self, o: u16) -> bool {
+    fn c8_flow_goto(&mut self, o: u16) {
         // 1NNN - goto
         self.pc = o & 0x0FFF;
-        true
     }
 
-    fn c8_flow_gosub(&mut self, o: u16) -> bool {
+    fn c8_flow_gosub(&mut self, o: u16) {
         // 2NNN - subroutine
         self.stack[usize::from(self.sp)] = self.pc;
         self.sp += 1;
         assert!(usize::from(self.sp) < STACK_SIZE, "stack pointer too high");
 
         self.pc = o & 0x0FFF;
-        true
     }
 
     fn c8_display_clear(&mut self) -> u16 {
@@ -354,10 +363,10 @@ impl Chip8 {
         let val = Self::opcode_value(o);
 
         if self.registers[reg] == val {
-            4
-        } else {
-            2
+            return 4;
         }
+
+        2
     }
 
     fn c8_cond_skip_neq_num(&self, o: u16) -> u16 {
@@ -366,10 +375,10 @@ impl Chip8 {
         let val = Self::opcode_value(o);
 
         if self.registers[reg] == val {
-            2
-        } else {
-            4
+            return 2;
         }
+
+        4
     }
 
     fn c8_cond_skip_eq_reg(&self, o: u16) -> u16 {
@@ -377,10 +386,10 @@ impl Chip8 {
         let (reg_x, reg_y) = Self::register_xy(o);
 
         if self.registers[reg_x] == self.registers[reg_y] {
-            4
-        } else {
-            2
+            return 4;
         }
+
+        2
     }
 
     fn c8_const_set_num(&mut self, o: u16) -> u16 {
@@ -515,10 +524,10 @@ impl Chip8 {
         let (reg_x, reg_y) = Self::register_xy(o);
 
         if self.registers[reg_x] == self.registers[reg_y] {
-            2
-        } else {
-            4
+            return 2;
         }
+
+        4
     }
 
     fn c8_mem_store(&mut self, o: u16) -> u16 {
@@ -527,7 +536,7 @@ impl Chip8 {
         2
     }
 
-    fn c8_flow_jump(&mut self, o: u16) -> bool {
+    fn c8_flow_jump(&mut self, o: u16) {
         // BNNN - goto NNN + V0
         // BXNN - goto XNN + VX
         self.pc = (o & 0x0FFF)
@@ -537,8 +546,6 @@ impl Chip8 {
                     u16::from(self.registers[Self::register_x(o)])
                 }
             };
-
-        true
     }
 
     fn c8_rand_and_reg(&mut self, o: u16) -> u16 {
