@@ -954,6 +954,7 @@ impl Chip8 {
 mod tests {
     use std::panic;
 
+    use anyhow::anyhow;
     use anyhow::Error;
     use bitvec::bits;
     use bitvec::bitvec;
@@ -976,7 +977,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.draw = true;
@@ -996,7 +997,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.draw = false;
@@ -1016,7 +1017,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.draw = true;
@@ -1036,7 +1037,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.sound_timer = 1;
@@ -1056,7 +1057,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.sound_timer = 0;
@@ -1076,7 +1077,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.delay_timer = 15;
@@ -1098,7 +1099,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.delay_timer = 0;
@@ -1120,7 +1121,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
 
@@ -1139,7 +1140,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
 
@@ -1165,7 +1166,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
 
@@ -1199,7 +1200,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.key.fill(true);
@@ -1232,7 +1233,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
 
@@ -1263,7 +1264,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x3;
@@ -1284,7 +1285,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x400] = 0x00;
@@ -1335,7 +1336,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x13;
@@ -1356,7 +1357,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x25;
@@ -1406,7 +1407,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x53;
@@ -1429,7 +1430,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x55;
@@ -1452,7 +1453,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x66;
@@ -1475,7 +1476,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x76;
@@ -1499,7 +1500,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x73;
@@ -1523,7 +1524,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1547,7 +1548,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1573,7 +1574,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1599,7 +1600,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1625,7 +1626,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x82;
@@ -1650,7 +1651,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x83;
@@ -1675,7 +1676,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x81;
@@ -1700,7 +1701,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x85;
@@ -1725,7 +1726,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x84;
@@ -1750,7 +1751,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x81;
@@ -1775,7 +1776,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x33;
@@ -1797,7 +1798,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x33;
@@ -1819,7 +1820,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x43;
@@ -1841,7 +1842,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x43;
@@ -1863,7 +1864,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x93;
@@ -1886,7 +1887,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0x95;
@@ -1909,7 +1910,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xA4;
@@ -1931,7 +1932,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xB8;
@@ -1954,7 +1955,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rng),
         );
         chip8.memory[0x200] = 0xC2;
@@ -1977,7 +1978,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xD2;
@@ -2009,7 +2010,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
 
@@ -2060,7 +2061,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -2085,7 +2086,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -2110,7 +2111,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -2135,7 +2136,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xE1;
@@ -2160,7 +2161,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF4;
@@ -2184,7 +2185,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF1;
@@ -2208,7 +2209,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF9;
@@ -2232,7 +2233,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF6;
@@ -2258,7 +2259,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.memory[0x200] = 0xF3;
@@ -2284,7 +2285,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xC60;
@@ -2312,7 +2313,7 @@ mod tests {
             Target::SuperChip,
             *profile::profiles()
                 .get(&Target::SuperChip)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xC60;
@@ -2340,7 +2341,7 @@ mod tests {
             Target::Chip8,
             *profile::profiles()
                 .get(&Target::Chip8)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xD00;
@@ -2369,7 +2370,7 @@ mod tests {
             Target::SuperChip,
             *profile::profiles()
                 .get(&Target::SuperChip)
-                .expect("Unknown profile"),
+                .ok_or(anyhow!("Unknown profile"))?,
             Box::new(rand::thread_rng()),
         );
         chip8.i = 0xD00;
