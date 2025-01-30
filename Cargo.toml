@@ -15,6 +15,5 @@ anyhow = "1"
 bitvec = "1"
 clap = { version = "4", features = ["derive"]}
 rand = "0.8"
+sdl3 = "0.14.3"
 
-[dependencies.sdl3]
-git = "https://github.com/revmischa/sdl3-rs"

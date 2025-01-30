@@ -17,6 +17,7 @@ use crate::profile;
 const WHITE: Color = Color::RGB(240, 240, 240);
 const BLACK: Color = Color::RGB(15, 15, 15);
 
+#[must_use]
 pub(super) struct Hardware {
     profile: profile::Profile,
     scale: u8,
