@@ -164,10 +164,10 @@ impl Chip8 {
         static LOCK: OnceLock<HashMap<Scancode, u8>> = OnceLock::new();
         LOCK.get_or_init(|| {
             HashMap::from([
-                (Scancode::Num1, 0x1),
-                (Scancode::Num2, 0x2),
-                (Scancode::Num3, 0x3),
-                (Scancode::Num4, 0xc),
+                (Scancode::_1, 0x1),
+                (Scancode::_2, 0x2),
+                (Scancode::_3, 0x3),
+                (Scancode::_4, 0xc),
                 (Scancode::Q, 0x4),
                 (Scancode::W, 0x5),
                 (Scancode::E, 0x6),
@@ -1152,6 +1152,8 @@ mod tests {
             keycode: None,
             keymod: Mod::empty(),
             repeat: false,
+            raw: 0,
+            which: 0,
         })?;
 
         // verify
@@ -1181,6 +1183,8 @@ mod tests {
                     keycode: None,
                     keymod: Mod::empty(),
                     repeat: false,
+                    raw: 0,
+                    which: 0,
                 })
             })
             .collect();
@@ -1216,6 +1220,8 @@ mod tests {
                     keycode: None,
                     keymod: Mod::empty(),
                     repeat: false,
+                    raw: 0,
+                    which: 0,
                 })
             })
             .collect();

@@ -58,7 +58,7 @@ impl Hardware {
     ) -> Result<Canvas<Window>> {
         // TODO iterate through all displays, work out which one mouse is on,
         // use that to determine window size limit
-        let dm = video_subsys.desktop_display_mode(0).map_err(Error::msg)?;
+        let dm = video_subsys.desktop_display_mode(1).map_err(Error::msg)?;
 
         if i32::from(width) > dm.w || i32::from(height) > dm.h {
             return Err(anyhow!("Window too large"));
@@ -70,11 +70,7 @@ impl Hardware {
             .build()
             .map_err(Error::new)?;
 
-        let mut canvas = window
-            .into_canvas()
-            .present_vsync()
-            .build()
-            .map_err(Error::new)?;
+        let mut canvas = window.into_canvas();
 
         canvas.set_draw_color(BLACK);
         canvas.clear();
@@ -88,20 +84,23 @@ impl Hardware {
         let sw = u16::from(self.profile.screen_width());
         let s = i32::from(self.scale * res_scale);
 
+        let mut frects: Vec<FRect> = vec![];
+
         for yline in 0..u16::from(self.profile.screen_height()) {
             for xline in 0..sw {
-                self.canvas
-                    .set_draw_color(if gfx[usize::from((yline * sw) + xline)] {
-                        WHITE
-                    } else {
-                        BLACK
-                    });
-                rect.set_x(i32::from(xline) * s);
-                rect.set_y(i32::from(yline) * s);
-                self.canvas
-                    .fill_rect(FRect::from(rect))
-                    .map_err(Error::msg)?;
+                if gfx[usize::from((yline * sw) + xline)] {
+                    rect.set_x(i32::from(xline) * s);
+                    rect.set_y(i32::from(yline) * s);
+                    frects.push(rect.into());
+                };
             }
+        }
+
+        self.canvas.set_draw_color(BLACK);
+        self.canvas.clear();
+        if !frects.is_empty() {
+            self.canvas.set_draw_color(WHITE);
+            self.canvas.fill_rects(&frects).map_err(Error::msg)?;
         }
         self.canvas.present();
 
@@ -109,15 +108,11 @@ impl Hardware {
     }
 
     pub(super) fn sound_stop(&mut self) {
-        if self.audio.playing() {
-            self.audio.pause();
-        }
+        self.audio.pause();
     }
 
     pub(super) fn sound_start(&mut self) {
-        if self.audio.paused() {
-            self.audio.play();
-        }
+        self.audio.play();
     }
 
     pub(super) fn event_iter(&mut self) -> EventPollIterator {
