@@ -56,9 +56,11 @@ impl Hardware {
         width: u16,
         height: u16,
     ) -> Result<Canvas<Window>> {
-        // TODO iterate through all displays, work out which one mouse is on,
-        // use that to determine window size limit
-        let dm = video_subsys.desktop_display_mode(1).map_err(Error::msg)?;
+        let dm = video_subsys
+            .get_primary_display()
+            .map_err(Error::msg)?
+            .get_usable_bounds()
+            .map_err(Error::msg)?;
 
         if i32::from(width) > dm.w || i32::from(height) > dm.h {
             return Err(anyhow!("Window too large"));

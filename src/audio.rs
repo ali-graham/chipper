@@ -1,6 +1,6 @@
-use anyhow::Error;
 use anyhow::Result;
 use sdl3::audio::AudioCallback;
+use sdl3::audio::AudioDevice;
 use sdl3::audio::AudioSpec;
 use sdl3::audio::AudioStreamWithCallback;
 use sdl3::AudioSubsystem;
@@ -28,14 +28,21 @@ impl AudioCallback<f32> for SquareWave {
 
 #[must_use]
 pub(super) struct Audio {
-    _audio_subsystem: AudioSubsystem, // see https://github.com/vhspace/sdl3-rs/issues/79
+    _subsystem: AudioSubsystem, // see https://github.com/vhspace/sdl3-rs/issues/79
+    _device: AudioDevice,
     stream: AudioStreamWithCallback<SquareWave>,
     is_playing: bool,
 }
 
+// impl Drop for Audio {
+//     fn drop(&mut self) {
+//         eprintln!("{0:?}", self._subsystem);
+//     }
+// }
+
 impl Audio {
     pub(super) fn new(context: &sdl3::Sdl) -> Result<Self> {
-        let audio_subsystem = context.audio()?;
+        let subsystem = context.audio()?;
 
         let desired_spec = AudioSpec {
             freq: Some(44_100),
@@ -43,20 +50,19 @@ impl Audio {
             format: Some(sdl3::audio::AudioFormat::F32LE),
         };
 
-        let stream = audio_subsystem
-            .open_playback_stream(
-                &desired_spec,
-                // initialize the audio callback
-                SquareWave {
-                    phase_inc: 440.0 / 44_100.0,
-                    phase: 0.0,
-                    volume: 0.25,
-                },
-            )
-            .map_err(Error::msg)?;
+        let device = subsystem.open_playback_device(&desired_spec)?;
+        let stream = device.open_playback_stream_with_callback(
+            &desired_spec,
+            SquareWave {
+                phase_inc: 440.0 / 44_100.0,
+                phase: 0.0,
+                volume: 0.25,
+            },
+        )?;
 
         Ok(Audio {
-            _audio_subsystem: audio_subsystem,
+            _subsystem: subsystem,
+            _device: device,
             stream,
             is_playing: false,
         })
