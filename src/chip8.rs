@@ -553,7 +553,7 @@ impl Chip8 {
         let reg = Self::register_x(o);
         let val = Self::opcode_value(o);
 
-        self.registers[reg] = val & self.rng.gen::<u8>();
+        self.registers[reg] = val & self.rng.r#gen::<u8>();
         2
     }
 
