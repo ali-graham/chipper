@@ -33,7 +33,7 @@ impl Emulator {
 
         let hardware = Hardware::new(scale, profile)?;
 
-        let chip8 = chip8::Chip8::new(target, profile, Box::new(rand::thread_rng()));
+        let chip8 = chip8::Chip8::new(target, profile, Box::new(rand::rng()));
 
         Ok(Emulator {
             profile,

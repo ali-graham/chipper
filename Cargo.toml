@@ -14,5 +14,5 @@ publish = false
 anyhow = "1"
 bitvec = "1"
 clap = { version = "4", features = ["derive"]}
-rand = "0.8"
+rand = "0.9"
 sdl2 = "0.37"
