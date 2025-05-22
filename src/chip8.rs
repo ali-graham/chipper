@@ -199,7 +199,7 @@ impl Chip8 {
 
         if let Some(k) = self.key.get_mut(usize::from(*key_num)) {
             k.commit(pressed);
-        };
+        }
 
         Ok(())
     }
@@ -633,7 +633,7 @@ impl Chip8 {
                 if self.target == Target::XoChip {
                     x_off %= usize::from(width);
                 } else if x_off >= usize::from(width) {
-                    // clip if going past bottom of screen
+                    // clip if going past side of screen
                     break;
                 }
                 if (mem_value & 0x80u8.rotate_right(xline.into())) != 0 {
@@ -642,7 +642,7 @@ impl Chip8 {
                     if let Some(g) = self.gfx.get_mut(offset) {
                         let b = *g;
                         g.commit(b ^ true);
-                    };
+                    }
                 }
             }
         }
