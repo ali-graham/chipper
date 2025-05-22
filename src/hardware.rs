@@ -94,7 +94,7 @@ impl Hardware {
                     rect.set_x(i32::from(xline) * s);
                     rect.set_y(i32::from(yline) * s);
                     frects.push(rect.into());
-                };
+                }
             }
         }
 

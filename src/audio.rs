@@ -2,6 +2,7 @@ use anyhow::Result;
 use sdl3::audio::AudioCallback;
 use sdl3::audio::AudioDevice;
 use sdl3::audio::AudioSpec;
+use sdl3::audio::AudioStream;
 use sdl3::audio::AudioStreamWithCallback;
 use sdl3::AudioSubsystem;
 
@@ -10,12 +11,16 @@ struct SquareWave {
     phase_inc: f32,
     phase: f32,
     volume: f32,
+    buffer: Vec<f32>,
 }
 
 impl AudioCallback<f32> for SquareWave {
-    fn callback(&mut self, out: &mut [f32]) {
+    fn callback(&mut self, stream: &mut AudioStream, requested: i32) {
+        self.buffer
+            .resize(usize::try_from(requested).expect("bad data"), 0.0);
+
         // Generate a square wave
-        for x in out.iter_mut() {
+        for x in &mut self.buffer {
             *x = if self.phase <= 0.5 {
                 self.volume
             } else {
@@ -23,6 +28,8 @@ impl AudioCallback<f32> for SquareWave {
             };
             self.phase = (self.phase + self.phase_inc) % 1.0;
         }
+
+        stream.put_data_f32(&self.buffer).unwrap();
     }
 }
 
@@ -57,6 +64,7 @@ impl Audio {
                 phase_inc: 440.0 / 44_100.0,
                 phase: 0.0,
                 volume: 0.25,
+                buffer: Vec::new(),
             },
         )?;
 
