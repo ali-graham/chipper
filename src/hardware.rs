@@ -117,7 +117,7 @@ impl Hardware {
         }
     }
 
-    pub(super) fn event_iter(&mut self) -> EventPollIterator {
+    pub(super) fn event_iter(&mut self) -> EventPollIterator<'_> {
         self.events.poll_iter()
     }
 }
