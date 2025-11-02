@@ -961,7 +961,8 @@ mod tests {
     use bitvec::prelude::BitArray;
     use bitvec::prelude::BitBox;
     use bitvec::prelude::Lsb0;
-    use rand::rngs::mock::StepRng;
+    use rand::rngs::SmallRng;
+    use rand::SeedableRng;
     use sdl3::keyboard::Mod;
     use sdl3::keyboard::Scancode;
 
@@ -1956,7 +1957,7 @@ mod tests {
     #[test]
     fn test_c8_rand_and_reg() -> Result<(), Error> {
         // when
-        let rng = StepRng::new(23, 2);
+        let rng = SmallRng::seed_from_u64(127);
         let mut chip8 = Chip8::new(
             Target::Chip8,
             *profile::profiles()
@@ -1972,7 +1973,7 @@ mod tests {
         chip8.emulate_cycle();
 
         // verify
-        assert_eq!(chip8.registers[2], 0x6);
+        assert_eq!(chip8.registers[2], 0x20);
         assert_eq!(chip8.pc, 0x202);
         Ok(())
     }
