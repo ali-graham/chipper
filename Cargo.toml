@@ -15,4 +15,5 @@ anyhow = "1"
 bitvec = "1"
 clap = { version = "4", features = ["derive"]}
 rand = "0.9"
-sdl2 = "0.37"
+# sdl2 = "0.37"
+sdl2 = { git = "https://github.com/Rust-SDL2/rust-sdl2" }
