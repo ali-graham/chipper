@@ -1,10 +1,10 @@
 use anyhow::Result;
 use sdl3::audio::AudioCallback;
-use sdl3::audio::AudioDevice;
+// use sdl3::audio::AudioDevice;
 use sdl3::audio::AudioSpec;
 use sdl3::audio::AudioStream;
 use sdl3::audio::AudioStreamWithCallback;
-use sdl3::AudioSubsystem;
+// use sdl3::AudioSubsystem;
 
 #[must_use]
 struct SquareWave {
@@ -16,8 +16,10 @@ struct SquareWave {
 
 impl AudioCallback<f32> for SquareWave {
     fn callback(&mut self, stream: &mut AudioStream, requested: i32) {
-        self.buffer
-            .resize(usize::try_from(requested).expect("bad data"), 0.0);
+        // Fallback to a safe default if conversion fails
+        let req: usize = requested.try_into().unwrap_or(8192);
+
+        self.buffer.resize(req, 0.0);
 
         // Generate a square wave
         for x in &mut self.buffer {
@@ -29,14 +31,14 @@ impl AudioCallback<f32> for SquareWave {
             self.phase = (self.phase + self.phase_inc) % 1.0;
         }
 
-        stream.put_data_f32(&self.buffer).unwrap();
+        let _ = stream.put_data_f32(&self.buffer);
     }
 }
 
 #[must_use]
 pub(super) struct Audio {
-    _subsystem: AudioSubsystem, // see https://github.com/vhspace/sdl3-rs/issues/79
-    _device: AudioDevice,
+    // _subsystem: AudioSubsystem, // see https://github.com/vhspace/sdl3-rs/issues/79
+    // _device: AudioDevice,
     stream: AudioStreamWithCallback<SquareWave>,
     is_playing: bool,
 }
@@ -69,8 +71,8 @@ impl Audio {
         )?;
 
         Ok(Audio {
-            _subsystem: subsystem,
-            _device: device,
+            // _subsystem: subsystem,
+            // _device: device,
             stream,
             is_playing: false,
         })
@@ -78,14 +80,14 @@ impl Audio {
 
     pub(super) fn play(&mut self) {
         if !self.is_playing {
-            self.stream.resume().expect("resume");
+            let _ = self.stream.resume(); //.expect("resume");
             self.is_playing = true;
         }
     }
 
     pub(super) fn pause(&mut self) {
         if self.is_playing {
-            self.stream.pause().expect("pause");
+            let _ = self.stream.pause(); // .expect("pause");
             self.is_playing = false;
         }
     }
