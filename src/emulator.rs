@@ -54,10 +54,19 @@ impl Emulator {
 
         loop {
             // we always want a refresh after a tick, even if about to quit
-            if matches!(ticker(self), Some(Action::Quit))
-                | matches!(self.refresh()?, Some(Action::Quit))
-            {
-                break;
+            let result_ti = ticker(self);
+            let result_re = self.refresh()?;
+
+            match result_ti.or(result_re) {
+                Some(Action::Quit) => {
+                    // eprintln!("quitting normally");
+                    break;
+                }
+                Some(Action::Invalid) => {
+                    eprintln!("invalid state");
+                    break;
+                }
+                _ => {}
             }
         }
 

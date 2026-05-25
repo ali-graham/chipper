@@ -1,5 +1,10 @@
 #![forbid(unsafe_code)]
-#![deny(clippy::pedantic)]
+#![deny(
+    clippy::pedantic,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    // clippy::indexing_slicing
+)]
 
 use anyhow::Result;
 use clap::value_parser;
@@ -30,6 +35,7 @@ pub(crate) enum Target {
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum Action {
     Quit,
+    Invalid,
 }
 
 /// Simple CHIP-8 emulator

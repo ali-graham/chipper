@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use bitvec::prelude::BitArray;
 use bitvec::prelude::BitVec;
 use bitvec::BitArr;
 use rand::Rng;
-use rand::RngCore;
+use rand::RngExt;
 use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
 
@@ -72,13 +73,13 @@ pub(super) struct Chip8 {
 
     target: Target,
 
-    rng: Box<dyn RngCore>,
+    rng: Box<dyn Rng>,
 
     key_wait: (Option<bool>, Option<u8>),
 }
 
 impl Chip8 {
-    pub(super) fn new(target: Target, profile: profile::Profile, rng: Box<dyn RngCore>) -> Self {
+    pub(super) fn new(target: Target, profile: profile::Profile, rng: Box<dyn Rng>) -> Self {
         let user_registers = match profile.user_register_count() {
             ur if ur > 0 => Some(crate::util::boxed_array::<u8>(usize::from(ur))),
             _ => None,
@@ -234,31 +235,29 @@ impl Chip8 {
         let sc = matches!(self.target, Target::SuperChipLegacy | Target::SuperChip);
         let xo = matches!(self.target, Target::XoChip);
 
-        if (opcode == 0x00FD) && (sc || xo) {
-            return Some(Action::Quit);
-        }
-
-        // these operations manipulate the program counter value directly
-        if match opcode {
-            0x00EE => {
-                self.c8_flow_return();
-                true
+        // these operations don't increment the program counter value
+        // (e.g. the flow ones manipulate it directly)
+        match opcode {
+            o if o == 0x00FD && (sc || xo) => {
+                return Some(Action::Quit);
             }
+            0x00EE => match self.c8_flow_return() {
+                Ok(()) => return None,
+                Err(_) => return Some(Action::Invalid),
+            },
             o if o & 0xF000 == 0x1000 => {
                 self.c8_flow_goto(o);
-                true
+                return None;
             }
             o if o & 0xF000 == 0x2000 => {
                 self.c8_flow_gosub(o);
-                true
+                return None;
             }
             o if o & 0xF000 == 0xB000 => {
                 self.c8_flow_jump(o);
-                true
+                return None;
             }
-            _ => false,
-        } {
-            return None;
+            _ => {}
         }
 
         self.pc += match opcode {
@@ -329,10 +328,14 @@ impl Chip8 {
         None
     }
 
-    fn c8_flow_return(&mut self) {
+    fn c8_flow_return(&mut self) -> Result<()> {
         // 00EE - return from a subroutine
-        self.sp = self.sp.checked_sub(1).expect("stack pointer too low");
+        self.sp = self
+            .sp
+            .checked_sub(1)
+            .ok_or(anyhow!("underflow occurred"))?;
         self.pc = self.stack[usize::from(self.sp)] + 2;
+        Ok(())
     }
 
     fn c8_flow_goto(&mut self, o: u16) {
@@ -1305,28 +1308,26 @@ mod tests {
     }
 
     #[test]
-    fn test_c8_flow_return_badstack() -> Result<(), Error> {
-        let result = catch_unwind_silent(|| {
-            // when
-            let mut chip8 = Chip8::new(
-                Target::Chip8,
-                *profile::profiles()
-                    .get(&Target::Chip8)
-                    .expect("Unknown profile"),
-                Box::new(rand::rng()),
-            );
-            chip8.memory[0x400] = 0x00;
-            chip8.memory[0x401] = 0xEE;
-            chip8.sp = 0;
-            chip8.pc = 0x400;
-            chip8.stack[0] = 0x600;
+    fn test_c8_flow_return_invalid() -> Result<(), Error> {
+        // when
+        let mut chip8 = Chip8::new(
+            Target::Chip8,
+            *profile::profiles()
+                .get(&Target::Chip8)
+                .expect("Unknown profile"),
+            Box::new(rand::rng()),
+        );
+        chip8.memory[0x400] = 0x00;
+        chip8.memory[0x401] = 0xEE;
+        chip8.sp = 0;
+        chip8.pc = 0x400;
+        chip8.stack[0] = 0x600;
 
-            // then
-            chip8.emulate_cycle();
-        });
+        // then
+        let result = chip8.emulate_cycle();
 
         // verify
-        assert!(result.is_err());
+        assert!(matches!(result, Some(val) if val == Action::Invalid));
         Ok(())
     }
 
