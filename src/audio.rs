@@ -1,10 +1,8 @@
 use anyhow::Result;
 use sdl3::audio::AudioCallback;
-// use sdl3::audio::AudioDevice;
 use sdl3::audio::AudioSpec;
 use sdl3::audio::AudioStream;
 use sdl3::audio::AudioStreamWithCallback;
-// use sdl3::AudioSubsystem;
 
 #[must_use]
 struct SquareWave {
@@ -37,17 +35,9 @@ impl AudioCallback<f32> for SquareWave {
 
 #[must_use]
 pub(super) struct Audio {
-    // _subsystem: AudioSubsystem, // see https://github.com/vhspace/sdl3-rs/issues/79
-    // _device: AudioDevice,
     stream: AudioStreamWithCallback<SquareWave>,
     is_playing: bool,
 }
-
-// impl Drop for Audio {
-//     fn drop(&mut self) {
-//         eprintln!("{0:?}", self._subsystem);
-//     }
-// }
 
 impl Audio {
     pub(super) fn new(context: &sdl3::Sdl) -> Result<Self> {
@@ -71,8 +61,6 @@ impl Audio {
         )?;
 
         Ok(Audio {
-            // _subsystem: subsystem,
-            // _device: device,
             stream,
             is_playing: false,
         })
@@ -80,23 +68,15 @@ impl Audio {
 
     pub(super) fn play(&mut self) {
         if !self.is_playing {
-            let _ = self.stream.resume(); //.expect("resume");
+            let _ = self.stream.resume();
             self.is_playing = true;
         }
     }
 
     pub(super) fn pause(&mut self) {
         if self.is_playing {
-            let _ = self.stream.pause(); // .expect("pause");
+            let _ = self.stream.pause();
             self.is_playing = false;
         }
     }
-
-    // pub(super) fn playing(&mut self) -> bool {
-    //     self...pause() == AudioStatus::Playing
-    // }
-
-    // pub(super) fn paused(&mut self) -> bool {
-    //     self.stream.status() == AudioStatus::Paused
-    // }
 }
